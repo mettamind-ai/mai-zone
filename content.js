@@ -108,6 +108,14 @@ function initialize() {
 
     if (changes.blockDistractions) {
       isDistractionBlockingEnabled = !!changes.blockDistractions.newValue;
+
+      if (!isDistractionBlockingEnabled) {
+        stopYouTubeNavigationObserver();
+        document.getElementById('mai-distraction-warning')?.remove?.();
+      } else if (isExtensionEnabled && window.location.hostname.includes('youtube.com')) {
+        startYouTubeNavigationObserver();
+        checkIfDistractingSite();
+      }
     }
 
     if (changes.isInFlow) {
@@ -175,8 +183,10 @@ function syncContentScriptActiveState() {
 
   attachDomListeners();
 
-  if (window.location.hostname.includes('youtube.com')) {
+  if (isDistractionBlockingEnabled && window.location.hostname.includes('youtube.com')) {
     startYouTubeNavigationObserver();
+  } else {
+    stopYouTubeNavigationObserver();
   }
 
   checkIfDistractingSite();
@@ -546,7 +556,7 @@ function checkIfDistractingSite() {
  * @returns {void}
  */
 function startYouTubeNavigationObserver() {
-  if (!isExtensionEnabled) return;
+  if (!isExtensionEnabled || !isDistractionBlockingEnabled) return;
   if (youtubeObserver || youtubeFallbackIntervalId) return;
 
   lastYoutubeUrl = window.location.href;
