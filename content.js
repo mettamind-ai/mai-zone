@@ -11,27 +11,52 @@
  ******************************************************************************/
 
 // Some browsers/versions may treat content scripts as classic scripts (no static `import`).
-// Use dynamic import so content.js runs reliably in both module and non-module contexts.
-const messagingModulePromise = (async () => {
-  try {
-    if (!globalThis?.chrome?.runtime?.getURL) return null;
-    return await import(chrome.runtime.getURL('messaging.js'));
-  } catch (error) {
-    console.error('🌸🌸🌸 Error loading messaging module:', error);
-    return null;
-  }
-})();
+// Keep a local safe messaging helper to avoid module import issues entirely.
 
 /**
- * Send a message to background safely (compat wrapper around messaging.js).
+ * Check whether extension context is still valid.
+ * @returns {boolean} True if safe to call chrome.runtime APIs
+ */
+function isExtensionContextValid() {
+  return !!(globalThis?.chrome?.runtime && chrome.runtime.id !== undefined);
+}
+
+/**
+ * Send a message to the background script safely (timeout + invalidation handling).
  * @param {Object} message - Message payload
  * @param {Object} [options]
- * @returns {Promise<any|null>}
+ * @param {number} [options.timeoutMs=2000] - Timeout in ms
+ * @returns {Promise<any|null>} Response object or null on failure/timeout
  */
-async function sendMessageSafely(message, options) {
-  const messaging = await messagingModulePromise;
-  if (!messaging?.sendMessageSafely) return null;
-  return messaging.sendMessageSafely(message, options);
+async function sendMessageSafely(message, { timeoutMs = 2000 } = {}) {
+  try {
+    if (!isExtensionContextValid()) return null;
+
+    return await new Promise((resolve) => {
+      const timeoutId = setTimeout(() => resolve(null), timeoutMs);
+
+      try {
+        chrome.runtime.sendMessage(message, (reply) => {
+          clearTimeout(timeoutId);
+
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            resolve(null);
+            return;
+          }
+
+          resolve(reply);
+        });
+      } catch (innerError) {
+        clearTimeout(timeoutId);
+        resolve(null);
+      }
+    });
+  } catch (error) {
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('Extension context invalidated')) return null;
+    return null;
+  }
 }
 
 /******************************************************************************
