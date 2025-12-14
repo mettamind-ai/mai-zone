@@ -15,7 +15,6 @@ let state = {
   blockDistractions: true,
   textPredictionEnabled: true,
   breakReminderEnabled: true,
-  notifyTextAnalysis: true,
   distractingSites: DEFAULT_DISTRACTING_SITES,
   deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES
 };

@@ -39,7 +39,7 @@ function setupMessageListeners() {
 /**
  * Start deep work mode
  */
-export function startDeepWork(data, sendResponse) {
+function startDeepWork(data, sendResponse) {
   try {
     const task = data?.task;
     if (!task) {
@@ -103,7 +103,7 @@ export function endDeepWork(sendResponse) {
 /**
  * Get current deep work state
  */
-export function getDeepWorkState(sendResponse) {
+function getDeepWorkState(sendResponse) {
   const { isInFlow, currentTask } = getState();
   
   if (sendResponse) {

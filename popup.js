@@ -11,7 +11,6 @@
 
 // Reference đến các DOM elements chính
 const enableToggle = document.getElementById('enable-toggle');                     // Toggle kích hoạt extension
-const textAnalysisToggle = document.getElementById('text-analysis-toggle');        // Toggle phân tích nội dung
 const blockDistractionsToggle = document.getElementById('block-distractions-toggle'); // Toggle chặn trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
 const settingsButton = document.getElementById('settings-button');                 // Nút mở trang cài đặt
@@ -38,7 +37,6 @@ function initializePopup() {
   // Đăng ký các event listeners
   console.log('🌸 Registering event listeners...');
   enableToggle.addEventListener('change', () => handleToggle('isEnabled'));
-  textAnalysisToggle.addEventListener('change', () => handleToggle('notifyTextAnalysis'));
   blockDistractionsToggle.addEventListener('change', () => handleToggle('blockDistractions'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
   settingsButton.addEventListener('click', openSettings);
@@ -85,7 +83,6 @@ function loadState() {
             // Use hardcoded defaults as last resort
             const defaults = {
               isEnabled: true,
-              notifyTextAnalysis: true,
               blockDistractions: true,
               breakReminderEnabled: true,
               isInFlow: false,
@@ -113,7 +110,6 @@ function loadState() {
 function updateUI(state) {
   // Update toggles
   enableToggle.checked = state.isEnabled;
-  textAnalysisToggle.checked = state.notifyTextAnalysis;
   blockDistractionsToggle.checked = state.blockDistractions;
   breakReminderToggle.checked = state.breakReminderEnabled;
   
@@ -143,10 +139,6 @@ function handleStateUpdate(updates) {
   if ('isEnabled' in updates) {
     updateEnabledState(updates.isEnabled);
     enableToggle.checked = updates.isEnabled;
-  }
-  
-  if ('notifyTextAnalysis' in updates) {
-    textAnalysisToggle.checked = updates.notifyTextAnalysis;
   }
   
   if ('blockDistractions' in updates) {
@@ -186,13 +178,11 @@ function handleStateUpdate(updates) {
 function updateEnabledState(isEnabled) {
   if (!isEnabled) {
     statusText.textContent = 'Mai đang ngủ. Nhấn kích hoạt để đánh thức.';
-    textAnalysisToggle.disabled = true;
     blockDistractionsToggle.disabled = true;
     breakReminderToggle.disabled = true;
     taskInput.disabled = true;
   } else {
     updateCurrentStatus();
-    textAnalysisToggle.disabled = false;
     blockDistractionsToggle.disabled = false;
     breakReminderToggle.disabled = false;
     
@@ -210,12 +200,11 @@ function updateEnabledState(isEnabled) {
 
 /**
  * Handle toggle changes
- * @feature f02 - AI Text Prediction (dependency on text analysis)
+ * @feature f02 - AI Text Prediction
  */
 function handleToggle(settingKey) {
   const toggleMap = {
     'isEnabled': enableToggle,
-    'notifyTextAnalysis': textAnalysisToggle,
     'blockDistractions': blockDistractionsToggle,
     'breakReminderEnabled': breakReminderToggle
   };
@@ -252,51 +241,16 @@ function handleToggle(settingKey) {
     return;
   }
   
-  // Special handling for text analysis toggle
-  if (settingKey === 'notifyTextAnalysis') {
-    // When disabling text analysis, also disable text prediction
-    if (!value) {
-      sendMessageSafely({
-        action: 'updateState',
-        payload: {
-          notifyTextAnalysis: false,
-          textPredictionEnabled: false
-        }
-      });
-      
-      // Also toggle text prediction in background
-      sendMessageSafely({
-        action: 'toggleTextPrediction',
-        data: { enabled: false }
-      });
-      
-      return;
-    } else {
-      // When enabling text analysis, also enable text prediction
-      sendMessageSafely({
-        action: 'updateState',
-        payload: {
-          notifyTextAnalysis: true,
-          textPredictionEnabled: true
-        }
-      });
-      
-      // Also toggle text prediction in background
-      sendMessageSafely({
-        action: 'toggleTextPrediction',
-        data: { enabled: true }
-      });
-      
-      return;
-    }
-  }
-  
   // Update state in background
   sendMessageSafely({
     action: 'updateState',
     payload: { [settingKey]: value }
   });
 }
+
+/******************************************************************************
+ * SETTINGS
+ ******************************************************************************/
 
 /**
  * Open options page

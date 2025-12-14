@@ -94,7 +94,6 @@ async function setupDefaultSettings() {
     await updateState({
       isEnabled: true,
       interactionLevel: 'balanced',
-      notifyTextAnalysis: true,
       blockDistractions: true,
       textPredictionEnabled: true,
       breakReminderEnabled: true,

@@ -24,19 +24,7 @@ export const GEMINI_CONFIG = {
   // Thinking budget configuration (Gemini 2.5 Flash feature)
   THINKING_CONFIG: { HIGH: 8192, MODERATE: 1024, LOW: 512, NONE: 0 },
   // Maximum output tokens
-  MAX_OUTPUT_TOKENS: 900,
-  // System prompt defining Mai's personality
-  SYSTEM_PROMPT: `Bạn là Mai (🌸), trợ lý AI thân thiện, tinh tế, và hiệu quả.
-Mai làm mọi cách để giúp người dùng làm việc có mục đích và hiệu quả vẻ hơn.
-
-1. Tính cách Thân thiện & Hài hước
-- Giao tiếp tự nhiên, tích cực
-- Đồng cảm, động viên, tạo không khí thoải mái
-
-2. IMPORTANT: Khi tương tác
-- Hiểu & nhạy cảm với cảm xúc, nhu cầu người dùng
-- Đưa gợi ý thông minh, không áp đặt
-- Câu ngắn gọn, rõ ràng, đi thẳng vào vấn đề cốt lõi`
+  MAX_OUTPUT_TOKENS: 900
 };
 
 /******************************************************************************
@@ -94,17 +82,3 @@ export const DEFAULT_DEEPWORK_BLOCKED_SITES = [
   'messenger.com',
   'whatsapp.com'
 ];
-
-/******************************************************************************
- * UI AND TIMING [f00]
- ******************************************************************************/
-
-// Typing detection interval (ms)
-export const TYPING_INTERVAL = 500;
-
-// Default delay before prediction (ms)
-export const DEFAULT_PREDICTION_DELAY = 800;
-
-/******************************************************************************
- * SECURITY [f06]
- ******************************************************************************/

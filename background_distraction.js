@@ -51,7 +51,7 @@ function setupMessageListeners() {
 /**
  * Enable distraction blocking
  */
-export async function enableDistractionsBlocking() {
+async function enableDistractionsBlocking() {
   await updateState({ blockDistractions: true });
   console.info('🌸 Distraction blocking enabled');
 
@@ -79,7 +79,7 @@ export async function enableDistractionsBlocking() {
 /**
  * Disable distraction blocking
  */
-export async function disableDistractionsBlocking() {
+async function disableDistractionsBlocking() {
   await updateState({ blockDistractions: false });
   console.info('🌸 Distraction blocking disabled');
 
@@ -95,7 +95,7 @@ export async function disableDistractionsBlocking() {
 /**
  * Toggle distraction blocking
  */
-export function toggleDistractionsBlocking(enabled) {
+function toggleDistractionsBlocking(enabled) {
   if (typeof enabled === 'undefined') {
     const { blockDistractions } = getState();
     blockDistractions ? disableDistractionsBlocking() : enableDistractionsBlocking();
@@ -109,7 +109,7 @@ export function toggleDistractionsBlocking(enabled) {
  * @feature f01 - Distraction Blocking
  * @feature f04 - Deep Work Mode (for messaging sites blocking)
  */
-export async function isDistractingWebsite(url) {
+async function isDistractingWebsite(url) {
   try {
     const { hostname } = new URL(url);
     const normalized = hostname.toLowerCase().replace(/^www\./, '');

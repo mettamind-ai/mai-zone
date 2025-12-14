@@ -77,7 +77,7 @@ function initializeBreakReminderIfEnabled() {
 /**
  * Toggle break reminder
  */
-export function toggleBreakReminder(enabled) {
+function toggleBreakReminder(enabled) {
   if (typeof enabled === 'boolean') {
     updateState({ breakReminderEnabled: enabled });
     
@@ -235,7 +235,7 @@ export function startBreakReminder(customInterval) {
 /**
  * Stop break reminder timer
  */
-export function stopBreakReminder() {
+function stopBreakReminder() {
   if (breakReminderTimerId) {
     clearTimeout(breakReminderTimerId);
     breakReminderTimerId = null;
@@ -369,7 +369,7 @@ export function resetBreakReminder(data, sendResponse) {
 /**
  * Get current break reminder state
  */
-export function getBreakReminderState(sendResponse) {
+function getBreakReminderState(sendResponse) {
   const { 
     breakReminderEnabled, 
     reminderStartTime, 

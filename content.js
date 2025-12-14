@@ -221,7 +221,6 @@ function captureCurrentContent(shouldPredict = false) {
   const currentContentValue = getCurrentElementContent();
   if (currentContentValue !== lastContent) {
     console.log('🌸 Content updated:', currentContentValue);
-    analyzeContent(currentContentValue);
     lastContent = currentContentValue;
     
     const MIN_CHARS = TEXT_PREDICTION_CONFIG?.MIN_CHARS_TO_TRIGGER || DEFAULT_MIN_CHARS;
@@ -246,30 +245,7 @@ function getCurrentElementContent() {
       : '';
 }
 
-/**
- * Analyze content for basic metrics
- */
-function analyzeContent(content) {
-  if (!content?.trim()) return;
-  
-  const analysis = {
-    wordCount: content.trim().split(/\s+/).filter(Boolean).length,
-    hasExclamation: content.includes('!'),
-    hasQuestion: content.includes('?'),
-    charCount: content.length
-  };
 
-  console.log('🌸 Basic content analysis:', analysis);
-
-  chrome.storage.local.get(['notifyTextAnalysis'], ({ notifyTextAnalysis }) => {
-    if (notifyTextAnalysis) {
-      sendMessageSafely({
-        action: 'contentAnalysis',
-        data: analysis
-      });
-    }
-  });
-}
 
 /******************************************************************************
  * UTILITY FUNCTIONS

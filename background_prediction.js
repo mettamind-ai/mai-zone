@@ -35,10 +35,6 @@ function setupMessageListeners() {
       onToggleTextPrediction(message.data, sendResponse);
       return true;
     }
-    else if (message.action === 'getApiKey') {
-      getApiKey(message.data?.provider).then(sendResponse);
-      return true;
-    }
     return false;
   });
 }
@@ -100,7 +96,7 @@ function formatPrediction(prediction) {
  * Predict user input based on context
  * @feature f02 - AI Text Prediction
  */
-export async function predictUserInput(context, apiKey) {
+async function predictUserInput(context, apiKey) {
   try {
     // Create prompt
     const prompt = createPredictionPrompt(context);
@@ -116,7 +112,6 @@ export async function predictUserInput(context, apiKey) {
         body: JSON.stringify({
           contents: [{
             parts: [{
-              // text: `${GEMINI_CONFIG.SYSTEM_PROMPT}\n\n${prompt}`
               text: prompt
             }]
           }],
@@ -153,7 +148,7 @@ export async function predictUserInput(context, apiKey) {
 /**
  * Handle text prediction request
  */
-export async function onRequestTextPrediction(data, tab, sendResponse) {
+async function onRequestTextPrediction(data, tab, sendResponse) {
   if (!data || !tab?.id) {
     sendResponse({ success: false, error: 'Invalid data or tab' });
     return;
@@ -163,14 +158,12 @@ export async function onRequestTextPrediction(data, tab, sendResponse) {
 
   try {
     // Check if feature is enabled
-    const { isEnabled, textPredictionEnabled, notifyTextAnalysis } = getState();
+    const { isEnabled, textPredictionEnabled } = getState();
 
-    // Check both text prediction enabled and text analysis enabled
-    if (!isEnabled || !textPredictionEnabled || !notifyTextAnalysis) {
+    if (!isEnabled || !textPredictionEnabled) {
       console.log('🌸 Text prediction is disabled:', { 
         isEnabled, 
-        textPredictionEnabled, 
-        notifyTextAnalysis 
+        textPredictionEnabled
       });
       sendResponse({ success: false, error: 'Text prediction is disabled' });
       return;
@@ -215,7 +208,7 @@ export async function onRequestTextPrediction(data, tab, sendResponse) {
 /**
  * Handle suggestion accepted
  */
-export function onSuggestionAccepted(data) {
+function onSuggestionAccepted(data) {
   if (!data?.suggestion) return;
   
   console.debug('🌸 User accepted suggestion:', data.suggestion);
@@ -226,20 +219,10 @@ export function onSuggestionAccepted(data) {
  * Toggle text prediction feature
  * @feature f02 - AI Text Prediction
  */
-export function onToggleTextPrediction(data, sendResponse) {
+function onToggleTextPrediction(data, sendResponse) {
   if (typeof data?.enabled !== 'boolean') {
     sendResponse({ success: false, error: 'Invalid data' });
     return;
-  }
-  
-  // If enabling text prediction, check if text analysis is enabled
-  if (data.enabled) {
-    const { notifyTextAnalysis } = getState();
-    if (!notifyTextAnalysis) {
-      console.info('🌸 Cannot enable text prediction while text analysis is disabled');
-      sendResponse({ success: false, error: 'Text analysis is disabled' });
-      return;
-    }
   }
   
   updateState({ textPredictionEnabled: data.enabled })
@@ -256,7 +239,7 @@ export function onToggleTextPrediction(data, sendResponse) {
 /**
  * Get API key for specified provider
  */
-export async function getApiKey(provider) {
+async function getApiKey(provider) {
   if (!provider || provider !== 'gemini') {
     console.warn('🌸🌸🌸 Only Gemini API is supported');
     return null;
