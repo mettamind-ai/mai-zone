@@ -35,7 +35,7 @@ Việc đặt tag tính năng trực tiếp vào **source code comments** giúp 
 - **`FAT` (Features And sub-Tasks Checklist)**: mô tả cụ thể và theo dõi chi tiết tiến độ các tính năng.
 
 ## Sử dụng `FIT` và `FAT` để đạt hiệu quả cao nhất
-Việc tổ chức tài liệu và source code theo cách đánh tag và liên kết trực tiếp giúp tận dụng tối đa khả năng hỗ trợ của LLM. Việc này đảm bảo tính lâu dài, dễ hiểu, dễ phát triển và dễ bảo trì về sau. Ví dụ: thay vì viết dài dòng, giờ chỉ gõ _Triển khai tính năng `f02`_, _Rà soát code `f04` để phát hiện lỗi tiềm ẩn_. 
+Việc tổ chức tài liệu và source code theo cách đánh tag và liên kết trực tiếp giúp tận dụng tối đa khả năng hỗ trợ của LLM. Việc này đảm bảo tính lâu dài, dễ hiểu, dễ phát triển và dễ bảo trì về sau. Ví dụ: thay vì viết dài dòng, giờ chỉ gõ _Triển khai tính năng `f06`_, _Rà soát code `f04` để phát hiện lỗi tiềm ẩn_. 
 
 **Hãy dùng và update bảng FIT và Checklist FAT thường xuyên**
 
@@ -49,7 +49,6 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |--------------|--------------------------------------|------------------------------------------------------------|--------------------|--------------|------------|------------------------------------------|
 |<!--r1 c1-->f00|<!--r1 c2-->Text Input Detection     |<!--r1 c3-->Phát hiện và theo dõi người dùng nhập liệu      |<!--r1 c4-->`content.js`   |<!--r1 c5-->`handleFocusIn()`, `handleKeyDown()`  | — |<!--r1 c7-->✅ Done |
 |<!--r2 c1-->f01|<!--r2 c2-->Distraction Blocking     |<!--r2 c3-->Cảnh báo, chặn truy cập trang gây mất tập trung |<!--r2 c4-->`background_distraction.js`, `distraction_matcher.js`, `content.js` |<!--r2 c5-->`getDistractionMatch()`, `isDistractingWebsite()`, `showDistractionWarning()`  | — |<!--r2 c7-->✅ Done |
-|<!--r3 c1-->f02|<!--r3 c2-->AI Text Prediction (Removed) |<!--r3 c3-->Đã loại bỏ (không dùng LLM key)                 |<!--r3 c4-->— |<!--r3 c5-->— | — |<!--r3 c7-->🚫 Removed |
 |<!--r4 c1-->f03|<!--r4 c2-->Break Reminder           |<!--r4 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r4 c4-->`background_breakReminder.js`, `popup.js`, `clipmd_offscreen.js` |<!--r4 c5-->`sendBreakReminder()`, `startBreakReminder()`, `updateBadgeWithTimerDisplay()` | **Alt + A** |<!--r4 c7-->✅ Done |
 |<!--r5 c1-->f04|<!--r5 c2-->Deep Work Mode           |<!--r5 c3-->Tập trung sâu vào một task 40"                  |<!--r5 c4-->`background_breakReminder.js`, `background_distraction.js`, `distraction_matcher.js`, `popup.js`, `clipmd_offscreen.js`  |<!--r5 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter**, **Huy hiệu mm:ss** |<!--r5 c7-->✅ Done |
 |<!--r6 c1-->f05|<!--r6 c2-->State Management         |<!--r6 c3-->Đồng bộ hóa trạng thái toàn extension           |<!--r6 c4-->`background_state.js`, `state_core.js`, `state_contract.js`, `state_helpers.js`, `actions.js`, `actions_global.js`, `messaging.js` |<!--r6 c5-->`ensureInitialized()`, `getState()`, `updateState()`, `sanitizeStoredState()` | — |<!--r6 c7-->✅ Done   |
