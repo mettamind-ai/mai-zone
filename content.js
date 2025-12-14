@@ -126,7 +126,6 @@ const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
 let currentElement = null;
 let lastContentLength = 0;
 let typingTimer = null;
-let isExtensionEnabled = true;
 let isDistractionBlockingEnabled = true;
 let domListenersAttached = false;
 
@@ -151,10 +150,9 @@ let lastYoutubeUrl = '';
 function initialize() {
   console.log('🌸 Mai content script initialized');
 
-  // Load state early so we can avoid unnecessary listeners work when disabled
-  chrome.storage.local.get(['isEnabled', 'blockDistractions', CHATGPT_ZEN_STORAGE_KEY], (result) => {
-    const { isEnabled, blockDistractions } = result || {};
-    isExtensionEnabled = typeof isEnabled === 'boolean' ? isEnabled : true;
+  // Load settings early so we can avoid unnecessary work for disabled features
+  chrome.storage.local.get(['blockDistractions', CHATGPT_ZEN_STORAGE_KEY], (result) => {
+    const { blockDistractions } = result || {};
     isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
 
     const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
@@ -168,18 +166,13 @@ function initialize() {
 
   // [f04c] Listen for deep work status changes and settings
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.isEnabled) {
-      isExtensionEnabled = !!changes.isEnabled.newValue;
-      syncContentScriptActiveState();
-    }
-
     if (changes.blockDistractions) {
       isDistractionBlockingEnabled = !!changes.blockDistractions.newValue;
 
       if (!isDistractionBlockingEnabled) {
         stopYouTubeNavigationObserver();
         document.getElementById('mai-distraction-warning')?.remove?.();
-      } else if (isExtensionEnabled && window.location.hostname.includes('youtube.com')) {
+      } else if (window.location.hostname.includes('youtube.com')) {
         startYouTubeNavigationObserver();
         checkIfDistractingSite();
       }
@@ -215,50 +208,10 @@ function attachDomListeners() {
 }
 
 /**
- * Detach DOM listeners when extension is disabled to reduce overhead.
- * @returns {void}
- */
-function detachDomListeners() {
-  if (!domListenersAttached) return;
-
-  document.removeEventListener('focusin', handleFocusIn);
-  document.removeEventListener('keydown', handleKeyDown);
-  document.removeEventListener('keyup', handleKeyUp);
-  document.removeEventListener('click', handleClick);
-
-  domListenersAttached = false;
-}
-
-/**
- * Stop any transient work/UI and reset in-memory state.
- * @returns {void}
- */
-function resetTransientState() {
-  clearTimeout(typingTimer);
-  typingTimer = null;
-  currentElement = null;
-  lastContentLength = 0;
-
-  stopYouTubeNavigationObserver();
-  document.getElementById('mai-distraction-warning')?.remove?.();
-
-  // [f07] Always clean up DOM changes when extension turns off.
-  stopChatgptZenObserver();
-  restoreAllChatgptZenHiddenElements();
-  removeChatgptToast();
-}
-
-/**
- * Sync active state (enabled/disabled) for the content script.
+ * Sync features based on current settings.
  * @returns {void}
  */
 function syncContentScriptActiveState() {
-  if (!isExtensionEnabled) {
-    detachDomListeners();
-    resetTransientState();
-    return;
-  }
-
   attachDomListeners();
 
   if (isDistractionBlockingEnabled && window.location.hostname.includes('youtube.com')) {
@@ -283,7 +236,6 @@ function syncContentScriptActiveState() {
  * @returns {void}
  */
 function handleFocusIn(event) {
-  if (!isExtensionEnabled) return;
   try {
     const element = event.target;
     if (isTextInput(element)) {
@@ -310,7 +262,6 @@ function handleFocusIn(event) {
  * Handle click on text input elements
  */
 function handleClick(event) {
-  if (!isExtensionEnabled) return;
   try {
     const element = event.target;
     if (isTextInput(element) && element !== currentElement) {
@@ -331,7 +282,6 @@ function handleClick(event) {
  * Handle typing events (shared by keydown and keyup)
  */
 function handleTypingEvent(event) {
-  if (!isExtensionEnabled) return;
   if (!currentElement) return;
   
   clearTimeout(typingTimer);
@@ -371,7 +321,6 @@ function handleKeyUp(event) {
  * @returns {boolean} True if handled
  */
 function handleClipmdHotkey(event) {
-  if (!isExtensionEnabled) return false;
   if (!event?.isTrusted) return false;
   if (!event.altKey || event.ctrlKey || event.metaKey) return false;
   if (event.shiftKey) return false;
@@ -417,12 +366,6 @@ function isChatgptHost() {
 function syncChatgptHelperActiveState() {
   if (!isChatgptHost()) return;
 
-  if (!isExtensionEnabled) {
-    stopChatgptZenObserver();
-    restoreAllChatgptZenHiddenElements();
-    return;
-  }
-
   if (isChatgptZenModeEnabled) {
     applyChatgptZenMode(true, { scope: 'all' });
     startChatgptZenObserver();
@@ -442,7 +385,6 @@ function syncChatgptHelperActiveState() {
  * @returns {boolean} True if handled
  */
 function handleChatgptHotkeys(event) {
-  if (!isExtensionEnabled) return false;
   if (!isChatgptHost()) return false;
   if (!event?.isTrusted) return false;
   if (!event.altKey || event.ctrlKey || event.metaKey) return false;
@@ -848,8 +790,8 @@ function handleBackgroundMessages(message, sender, sendResponse) {
     return true;
   }
 
-  if (!isExtensionEnabled) return false;
   if (message?.action !== messageActions.distractingWebsite) return false;
+  if (!isDistractionBlockingEnabled) return false;
 
   showDistractionWarning(message.data);
   sendResponse({ received: true });
@@ -1206,7 +1148,7 @@ function setupWarningButtons(warningDiv) {
  */
 function checkIfDistractingSite() {
   try {
-    if (!isExtensionEnabled || !isDistractionBlockingEnabled) return;
+    if (!isDistractionBlockingEnabled) return;
 
     const currentUrl = window.location.href;
     if (!currentUrl || currentUrl === 'about:blank') return;
@@ -1230,7 +1172,7 @@ function checkIfDistractingSite() {
  * @returns {void}
  */
 function startYouTubeNavigationObserver() {
-  if (!isExtensionEnabled || !isDistractionBlockingEnabled) return;
+  if (!isDistractionBlockingEnabled) return;
   if (youtubeObserver || youtubeFallbackIntervalId) return;
 
   lastYoutubeUrl = window.location.href;

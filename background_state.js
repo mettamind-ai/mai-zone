@@ -94,7 +94,6 @@ function areStateValuesEqual(a, b) {
 function summarizeStateForLog(s) {
   const stateObj = s && typeof s === 'object' ? s : state;
   return {
-    isEnabled: !!stateObj.isEnabled,
     blockDistractions: !!stateObj.blockDistractions,
     isInFlow: !!stateObj.isInFlow,
     breakReminderEnabled: !!stateObj.breakReminderEnabled,

@@ -156,8 +156,8 @@ function setupMessageListeners() {
         }
 
         await ensureInitialized();
-        const { isEnabled, blockDistractions } = getState();
-        if (!isEnabled || !blockDistractions) {
+        const { blockDistractions } = getState();
+        if (!blockDistractions) {
           sendResponse({ success: false, error: 'Disabled' });
           return;
         }
@@ -211,8 +211,8 @@ function setupMessageListeners() {
  */
 async function syncDistractionBlocking() {
   await ensureInitialized();
-  const { isEnabled, blockDistractions } = getState();
-  const shouldEnable = !!(isEnabled && blockDistractions);
+  const { blockDistractions } = getState();
+  const shouldEnable = !!blockDistractions;
 
   if (shouldEnable) {
     enableDistractionsBlocking();
@@ -228,7 +228,7 @@ async function syncDistractionBlocking() {
  */
 function handleStateUpdated(updates) {
   if (!updates || typeof updates !== 'object') return;
-  if ('isEnabled' in updates || 'blockDistractions' in updates) {
+  if ('blockDistractions' in updates) {
     syncDistractionBlocking();
   }
 }
@@ -309,8 +309,8 @@ async function handleWebNavigation(details) {
 
   await ensureInitialized();
 
-  const { isEnabled, blockDistractions } = getState();
-  if (!isEnabled || !blockDistractions) {
+  const { blockDistractions } = getState();
+  if (!blockDistractions) {
     return;
   }
 

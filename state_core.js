@@ -9,7 +9,6 @@ import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './con
 /***** DEFAULT STATE *****/
 
 export const DEFAULT_STATE = Object.freeze({
-  isEnabled: true,
   currentTask: '',
   isInFlow: false,
   blockDistractions: true,
@@ -151,29 +150,7 @@ function normalizeTask(value, fallback) {
   return trimmed.length > MAX_TASK_LENGTH ? trimmed.slice(0, MAX_TASK_LENGTH) : trimmed;
 }
 
-/***** VALIDITY + POLICY (SEPARATED) *****/
-
-/**
- * Apply product policy decisions to state (separate from validity invariants).
- * NOTE: Keep behavior identical to previous `enforceStateInvariants`.
- * @param {Object} nextState - State sau merge/sanitize
- * @returns {Object} State sau khi áp policy
- */
-function applyStatePolicy(nextState) {
-  const s = { ...nextState };
-
-  // Policy: disabling the extension wipes the current session.
-  if (!s.isEnabled) {
-    s.isInFlow = false;
-    s.currentTask = '';
-    s.breakReminderEnabled = false;
-    s.reminderStartTime = null;
-    s.reminderInterval = null;
-    s.reminderExpectedEndTime = null;
-  }
-
-  return s;
-}
+/***** VALIDITY INVARIANTS *****/
 
 /**
  * Enforce validity invariants to keep state consistent.
@@ -209,7 +186,7 @@ function enforceStateValidity(nextState) {
  * @returns {Object} State đã được chỉnh theo policy + invariants
  */
 function enforceStateInvariants(nextState) {
-  return enforceStateValidity(applyStatePolicy(nextState));
+  return enforceStateValidity(nextState);
 }
 
 /***** PURE TRANSITIONS *****/
@@ -224,7 +201,6 @@ export function sanitizeStoredState(storedState) {
   const stored = storedState || {};
 
   const merged = {
-    isEnabled: normalizeBoolean(stored.isEnabled, base.isEnabled),
     currentTask: normalizeTask(stored.currentTask, base.currentTask),
     isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
     blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
@@ -253,7 +229,6 @@ export function computeNextState(currentState, updates) {
 
   const sanitized = {};
 
-  if ('isEnabled' in updates) sanitized.isEnabled = normalizeBoolean(updates.isEnabled, current.isEnabled);
   if ('currentTask' in updates) sanitized.currentTask = normalizeTask(updates.currentTask, current.currentTask);
   if ('isInFlow' in updates) sanitized.isInFlow = normalizeBoolean(updates.isInFlow, current.isInFlow);
   if ('blockDistractions' in updates) {

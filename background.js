@@ -22,7 +22,6 @@ import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './con
 function summarizeStateForLog(state) {
   const s = state && typeof state === 'object' ? state : {};
   return {
-    isEnabled: !!s.isEnabled,
     blockDistractions: !!s.blockDistractions,
     isInFlow: !!s.isInFlow,
     breakReminderEnabled: !!s.breakReminderEnabled
@@ -138,7 +137,6 @@ async function setupDefaultSettings() {
     const { updateState } = await import('./background_state.js');
     
     await updateState({
-      isEnabled: true,
       blockDistractions: true,
       breakReminderEnabled: false,
       distractingSites: DEFAULT_DISTRACTING_SITES,

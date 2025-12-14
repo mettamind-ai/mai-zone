@@ -66,7 +66,7 @@ export function isHostnameInList(hostname, sites) {
 export function getDistractionMatch(url, state) {
   const s = state && typeof state === 'object' ? state : {};
 
-  if (!s.isEnabled || !s.blockDistractions) {
+  if (!s.blockDistractions) {
     return { hostname: '', isDistracting: false, isDeepWorkBlocked: false };
   }
 
@@ -86,4 +86,3 @@ export function getDistractionMatch(url, state) {
     isDeepWorkBlocked
   };
 }
-

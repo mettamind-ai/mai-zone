@@ -18,7 +18,6 @@ test('isHostnameInList matches exact and subdomains', () => {
 
 test('getDistractionMatch detects standard distracting sites', () => {
   const state = {
-    isEnabled: true,
     blockDistractions: true,
     isInFlow: false,
     distractingSites: ['facebook.com'],
@@ -33,7 +32,6 @@ test('getDistractionMatch detects standard distracting sites', () => {
 
 test('getDistractionMatch detects deep work blocked sites only in flow', () => {
   const baseState = {
-    isEnabled: true,
     blockDistractions: true,
     distractingSites: ['facebook.com'],
     deepWorkBlockedSites: ['messenger.com']
@@ -50,8 +48,7 @@ test('getDistractionMatch detects deep work blocked sites only in flow', () => {
 
 test('getDistractionMatch respects disabled settings', () => {
   const state = {
-    isEnabled: false,
-    blockDistractions: true,
+    blockDistractions: false,
     isInFlow: true,
     distractingSites: ['facebook.com'],
     deepWorkBlockedSites: ['messenger.com']
@@ -60,4 +57,3 @@ test('getDistractionMatch respects disabled settings', () => {
   const match = getDistractionMatch('https://facebook.com', state);
   assert.equal(match.isDistracting, false);
 });
-

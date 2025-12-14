@@ -5,7 +5,6 @@ import { computeNextState, diffState, getDefaultState, sanitizeStoredState } fro
 
 test('sanitizeStoredState uses safe defaults', () => {
   const state = sanitizeStoredState({});
-  assert.equal(state.isEnabled, true);
   assert.equal(state.blockDistractions, true);
   assert.equal(state.isInFlow, false);
   assert.ok(Array.isArray(state.distractingSites));
@@ -25,7 +24,7 @@ test('diffState ignores array reference differences when values are equal', () =
   assert.deepEqual(diffState(prev, next), {});
 });
 
-test('computeNextState applies disable policy (wipe session)', () => {
+test('computeNextState clears timer when exiting flow', () => {
   const current = {
     ...getDefaultState(),
     isInFlow: true,
@@ -36,10 +35,8 @@ test('computeNextState applies disable policy (wipe session)', () => {
     reminderExpectedEndTime: Date.now() + 1000
   };
 
-  const next = computeNextState(current, { isEnabled: false });
-  assert.equal(next.isEnabled, false);
+  const next = computeNextState(current, { isInFlow: false });
   assert.equal(next.isInFlow, false);
-  assert.equal(next.currentTask, '');
   assert.equal(next.breakReminderEnabled, false);
   assert.equal(next.reminderStartTime, null);
   assert.equal(next.reminderInterval, null);
@@ -51,4 +48,3 @@ test('computeNextState enforces: isInFlow requires a task', () => {
   const next = computeNextState(current, { isInFlow: true, currentTask: '' });
   assert.equal(next.isInFlow, false);
 });
-

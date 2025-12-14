@@ -15,7 +15,6 @@ import { messageActions } from './actions.js';
  ******************************************************************************/
 
 // Reference đến các DOM elements chính
-const enableToggle = document.getElementById('enable-toggle');                     // Toggle kích hoạt extension
 const blockDistractionsToggle = document.getElementById('block-distractions-toggle'); // Toggle chặn trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
 const settingsButton = document.getElementById('settings-button');                 // Nút mở trang cài đặt
@@ -42,7 +41,6 @@ function initializePopup() {
 
   // Đăng ký các event listeners
   console.log('🌸 Registering event listeners...');
-  enableToggle.addEventListener('change', () => handleToggle('isEnabled'));
   blockDistractionsToggle.addEventListener('change', () => handleToggle('blockDistractions'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
   settingsButton.addEventListener('click', openSettings);
@@ -127,7 +125,6 @@ function setBreakReminderLabelText(text) {
  */
 function loadState() {
   const defaults = {
-    isEnabled: true,
     blockDistractions: true,
     breakReminderEnabled: false,
     isInFlow: false,
@@ -147,7 +144,6 @@ function loadState() {
  */
 function updateUI(state) {
   // Update toggles
-  enableToggle.checked = state.isEnabled;
   blockDistractionsToggle.checked = state.blockDistractions;
   breakReminderToggle.checked = state.breakReminderEnabled;
   
@@ -157,9 +153,6 @@ function updateUI(state) {
   
   // Update task label
   setBreakReminderLabelText(state.isInFlow ? 'Đang Deep Work...' : 'Khung Deep Work');
-  
-  // Update enabled state UI
-  updateEnabledState(state.isEnabled);
 }
 
 /**
@@ -167,11 +160,6 @@ function updateUI(state) {
  */
 function handleStateUpdate(updates) {
   // Only update relevant UI elements for the changes
-  if ('isEnabled' in updates) {
-    updateEnabledState(updates.isEnabled);
-    enableToggle.checked = updates.isEnabled;
-  }
-  
   if ('blockDistractions' in updates) {
     blockDistractionsToggle.checked = updates.blockDistractions;
   }
@@ -192,27 +180,6 @@ function handleStateUpdate(updates) {
   }
 }
 
-/**
- * Update UI based on enabled state
- */
-function updateEnabledState(isEnabled) {
-  if (!isEnabled) {
-    statusText.textContent = 'Mai đang ngủ. Nhấn kích hoạt để đánh thức.';
-    blockDistractionsToggle.disabled = true;
-    breakReminderToggle.disabled = true;
-    taskInput.disabled = true;
-  } else {
-    updateCurrentStatus();
-    blockDistractionsToggle.disabled = false;
-    breakReminderToggle.disabled = false;
-    
-    // Set task input state based on current flow state
-    getStateSafely('isInFlow').then((state) => {
-      taskInput.disabled = !!state?.isInFlow;
-    });
-  }
-}
-
 /******************************************************************************
  * EVENT HANDLERS
  ******************************************************************************/
@@ -226,7 +193,6 @@ function updateEnabledState(isEnabled) {
  */
 function handleToggle(settingKey) {
   const toggleMap = {
-    'isEnabled': enableToggle,
     'blockDistractions': blockDistractionsToggle,
     'breakReminderEnabled': breakReminderToggle
   };
@@ -408,38 +374,30 @@ function updateCountdownTimer() {
 function updateCurrentStatus() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (!tabs?.length) return;
-    
-    // Get enabled state
-    getStateSafely('isEnabled').then((state) => {
-      if (!state || !state.isEnabled) {
-        statusText.textContent = 'Mai đang ngủ. Nhấn kích hoạt để đánh thức.';
-        return;
-      }
-      
-      const currentTab = tabs[0];
-      
-      if (currentTab.url) {
-        try {
-          const url = new URL(currentTab.url);
-          const hostname = url.hostname.replace(/^www\./, '');
-          
-          // Site-specific messages
-          const messages = {
-            'youtube.com': 'Mai đang quan sát YouTube... Nhớ đừng xem quá lâu nhé!',
-            'facebook.com': 'Mai đang theo dõi Facebook... Đừng scroll quá nhiều nhé!',
-            'gmail.com': 'Mai đang hỗ trợ bạn đọc email... Trả lời ngắn gọn thôi nhé!',
-            'netflix.com': 'Mai nhắc bạn đừng xem phim quá khuya nhé!',
-            'github.com': 'Mai đang theo dõi bạn code trên GitHub... hấn hảo!',
-            'google.com': 'Mai đang quan sát bạn tìm kiếm... Tìm được gì hay chưa?'
-          };
-          
-          statusText.textContent = messages[hostname] || `Mai đang quan sát ${hostname}...`;
-        } catch (err) {
-          statusText.textContent = 'Mai đang quan sát âm thầm...';
-        }
-      } else {
+
+    const currentTab = tabs[0];
+
+    if (currentTab.url) {
+      try {
+        const url = new URL(currentTab.url);
+        const hostname = url.hostname.replace(/^www\./, '');
+
+        // Site-specific messages
+        const messages = {
+          'youtube.com': 'Mai đang quan sát YouTube... Nhớ đừng xem quá lâu nhé!',
+          'facebook.com': 'Mai đang theo dõi Facebook... Đừng scroll quá nhiều nhé!',
+          'gmail.com': 'Mai đang hỗ trợ bạn đọc email... Trả lời ngắn gọn thôi nhé!',
+          'netflix.com': 'Mai nhắc bạn đừng xem phim quá khuya nhé!',
+          'github.com': 'Mai đang theo dõi bạn code trên GitHub... hấn hảo!',
+          'google.com': 'Mai đang quan sát bạn tìm kiếm... Tìm được gì hay chưa?'
+        };
+
+        statusText.textContent = messages[hostname] || `Mai đang quan sát ${hostname}...`;
+      } catch (err) {
         statusText.textContent = 'Mai đang quan sát âm thầm...';
       }
-    });
+    } else {
+      statusText.textContent = 'Mai đang quan sát âm thầm...';
+    }
   });
 }

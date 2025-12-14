@@ -44,7 +44,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 /**
  * Read timer state from storage (privacy-first: no task content logging).
  * @returns {Promise<{
- *  isEnabled: boolean,
  *  isInFlow: boolean,
  *  breakReminderEnabled: boolean,
  *  hasTask: boolean,
@@ -55,7 +54,7 @@ async function readTimerStateFromStorage() {
   const data = await new Promise((resolve) => {
     try {
       chrome.storage.local.get(
-        ['isEnabled', 'isInFlow', 'breakReminderEnabled', 'currentTask', 'reminderStartTime', 'reminderInterval', 'reminderExpectedEndTime'],
+        ['isInFlow', 'breakReminderEnabled', 'currentTask', 'reminderStartTime', 'reminderInterval', 'reminderExpectedEndTime'],
         (result) => resolve(result || {})
       );
     } catch {
@@ -63,7 +62,6 @@ async function readTimerStateFromStorage() {
     }
   });
 
-  const isEnabled = !!data.isEnabled;
   const isInFlow = !!data.isInFlow;
   const breakReminderEnabled = !!data.breakReminderEnabled;
   const hasTask = !!(data.currentTask && String(data.currentTask).trim());
@@ -84,7 +82,7 @@ async function readTimerStateFromStorage() {
     expectedEndTime = startTimeRaw + intervalRaw;
   }
 
-  return { isEnabled, isInFlow, breakReminderEnabled, hasTask, expectedEndTime };
+  return { isInFlow, breakReminderEnabled, hasTask, expectedEndTime };
 }
 
 /**
@@ -121,9 +119,9 @@ function setBadgeText(text) {
  * @returns {Promise<void>}
  */
 async function tickBadge() {
-  const { isEnabled, isInFlow, breakReminderEnabled, hasTask, expectedEndTime } = await readTimerStateFromStorage();
+  const { isInFlow, breakReminderEnabled, hasTask, expectedEndTime } = await readTimerStateFromStorage();
 
-  const isActive = !!(isEnabled && isInFlow && breakReminderEnabled && hasTask && typeof expectedEndTime === 'number');
+  const isActive = !!(isInFlow && breakReminderEnabled && hasTask && typeof expectedEndTime === 'number');
   if (!isActive) {
     stopBadgeTicker();
     return;
@@ -168,8 +166,8 @@ function stopBadgeTicker() {
 function handleStorageChanged() {
   tickBadge()
     .then(async () => {
-      const { isEnabled, isInFlow, breakReminderEnabled, hasTask, expectedEndTime } = await readTimerStateFromStorage();
-      const isActive = !!(isEnabled && isInFlow && breakReminderEnabled && hasTask && typeof expectedEndTime === 'number');
+      const { isInFlow, breakReminderEnabled, hasTask, expectedEndTime } = await readTimerStateFromStorage();
+      const isActive = !!(isInFlow && breakReminderEnabled && hasTask && typeof expectedEndTime === 'number');
       if (isActive) startBadgeTicker();
       else stopBadgeTicker();
     })
@@ -182,7 +180,6 @@ try {
     if (!changes || typeof changes !== 'object') return;
 
     const relevantKeys = new Set([
-      'isEnabled',
       'isInFlow',
       'breakReminderEnabled',
       'currentTask',

@@ -100,7 +100,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 ## Testing
 
 - Unit tests (no bundler/deps): `node --test` (hoặc `npm test`).
-- Smoke test nhanh: bật **Kích hoạt Mai** + **Chặn trang web gây sao nhãng**, sau đó mở `https://facebook.com` và kiểm tra overlay cảnh báo.
+- Smoke test nhanh: bật **Chặn trang web gây sao nhãng**, sau đó mở `https://facebook.com` và kiểm tra overlay cảnh báo.
 
 
 ## ClipMD (Copy Markdown)

@@ -137,7 +137,6 @@ function handleStateUpdated(updates) {
   if (!updates || typeof updates !== 'object') return;
 
   const shouldSync =
-    'isEnabled' in updates ||
     'breakReminderEnabled' in updates ||
     'isInFlow' in updates ||
     'currentTask' in updates ||
@@ -148,7 +147,6 @@ function handleStateUpdated(updates) {
   if (!shouldSync) return;
 
   const shouldStop =
-    ('isEnabled' in updates && !updates.isEnabled) ||
     ('breakReminderEnabled' in updates && !updates.breakReminderEnabled) ||
     ('isInFlow' in updates && !updates.isInFlow) ||
     ('currentTask' in updates && !updates.currentTask);
@@ -258,7 +256,6 @@ function stopBreakReminder() {
 async function initializeBreakReminderIfEnabled() {
   const {
     breakReminderEnabled,
-    isEnabled,
     isInFlow,
     currentTask,
     reminderStartTime,
@@ -266,7 +263,7 @@ async function initializeBreakReminderIfEnabled() {
     reminderExpectedEndTime
   } = getState();
 
-  if (!breakReminderEnabled || !isEnabled || !isInFlow || !currentTask) {
+  if (!breakReminderEnabled || !isInFlow || !currentTask) {
     stopBreakReminder();
     return;
   }
@@ -290,7 +287,7 @@ async function initializeBreakReminderIfEnabled() {
 
     // After awaited work, re-check state to avoid scheduling orphan alarms.
     const refreshed = getState();
-    if (!refreshed.breakReminderEnabled || !refreshed.isEnabled || !refreshed.isInFlow || !refreshed.currentTask) {
+    if (!refreshed.breakReminderEnabled || !refreshed.isInFlow || !refreshed.currentTask) {
       stopBreakReminder();
       return;
     }
@@ -347,8 +344,8 @@ function updateBadgeWithTimerDisplay() {
 async function startBreakReminder(customInterval) {
   stopBreakReminder();
 
-  const { isEnabled, isInFlow, currentTask, breakReminderEnabled } = getState();
-  if (!isEnabled || !isInFlow || !currentTask || !breakReminderEnabled) {
+  const { isInFlow, currentTask, breakReminderEnabled } = getState();
+  if (!isInFlow || !currentTask || !breakReminderEnabled) {
     return;
   }
 
@@ -375,10 +372,10 @@ async function startBreakReminder(customInterval) {
  * @returns {void}
  */
 async function handleBreakReminderEnd() {
-  const { isEnabled, isInFlow, currentTask, breakReminderEnabled, reminderExpectedEndTime } = getState();
+  const { isInFlow, currentTask, breakReminderEnabled, reminderExpectedEndTime } = getState();
 
   // No longer valid -> just cleanup.
-  if (!isEnabled || !isInFlow || !currentTask || !breakReminderEnabled) {
+  if (!isInFlow || !currentTask || !breakReminderEnabled) {
     stopBreakReminder();
     return;
   }
@@ -516,12 +513,11 @@ function getBreakReminderState(sendResponse) {
         reminderStartTime,
         reminderInterval,
         reminderExpectedEndTime,
-        isEnabled,
         isInFlow,
         currentTask
       } = getState();
 
-      const isActive = !!(isEnabled && isInFlow && currentTask && breakReminderEnabled);
+      const isActive = !!(isInFlow && currentTask && breakReminderEnabled);
 
       if (!isActive) {
         sendResponse({
