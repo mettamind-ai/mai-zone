@@ -76,6 +76,20 @@ sendMessageToTabSafely(tabId, {
 - **Nhiệm vụ**: Quản lý tất cả cài đặt, cấu hình chi tiết các tính năng
 - **Lưu trữ**: Lưu cài đặt vào chrome.storage.sync hoặc chrome.storage.local
 
+## ClipMD (f06) — Copy Markdown bằng chọn vùng
+
+- **Mục tiêu**: Bấm shortcut → chọn (pick) 1 element trên trang → chuyển HTML → Markdown → copy vào clipboard.
+- **Picker**: Ưu tiên dùng **inspect overlay kiểu DevTools** (CDP qua `chrome.debugger`) để UX chọn vùng giống `AnswerDotAI/clipmd`.
+- **Fallback**: Nếu trình duyệt không hỗ trợ/không cho phép `debugger` hoặc `offscreen`, Mai sẽ fallback sang chế độ chọn element bằng click-capture trong `content.js` (UX có thể khác).
+
+### Luồng hoạt động (Markdown)
+
+1. User bấm **Alt+Q** hoặc click icon MaiZone (mở popup).
+2. `background_clipmd.js` bật inspect overlay (chế độ chọn node).
+3. User click element → background lấy `outerHTML` của element.
+4. `clipmd_offscreen.js` convert HTML → Markdown (Turndown).
+5. Background ghi Markdown vào clipboard (trong context của tab).
+
 ## Tổng Quan Kiến Trúc
 
 ```
