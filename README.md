@@ -1,5 +1,5 @@
 !!! **Lưu ý quan trọng dành cho AI Coding Agents:**  
-Trước khi thực hiện bất kỳ thao tác nào, bạn **phải đọc kỹ** [Coding Guidelines](./CLAUDE.md) và [How It Works Documentation](./HIWORK.md) !!!
+Trước khi thực hiện bất kỳ thao tác nào, bạn **phải đọc kỹ** [Coding Guidelines](./AGENTS.md) và [How It Works Documentation](./HIWORK.md) !!!
 
 ## `GG` Giới thiệu và Mục Tiêu (Goal) của Dự Án
 
