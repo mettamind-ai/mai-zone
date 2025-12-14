@@ -5,9 +5,13 @@
 - **ClipMD (f06)**: **Alt + Q** hoặc **click icon MaiZone** → chọn element trên trang → copy Markdown vào clipboard.
 - **ChatGPT Zen Mode (f07)**: trên `chatgpt.com`, **Alt + Z** ẩn/hiện UI; **Alt + S** dán prompt mẫu nhanh.
 
-## Hướng dẫn cài đặt browser ext
-<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />
 
+## Hướng dẫn cài đặt và giao diện
+|||
+|-|-|
+|<img width="2171" height="1437" alt="image" src="https://github.com/user-attachments/assets/31a828ca-642f-4f8d-9bf3-88f491405df4" />|<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />|
+
+---
 
 !!! **Lưu ý quan trọng dành cho AI Coding Agents:**  
 Trước khi thực hiện bất kỳ thao tác nào, bạn **phải đọc kỹ** [Coding Guidelines](./AGENTS.md) và [How It Works Documentation](./HIWORK.md) !!!
