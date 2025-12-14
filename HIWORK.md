@@ -20,8 +20,8 @@ Những tên file chuẩn khi xây dựng browser extension:
 
 ### `background.js`
 - **Phạm vi**: Chạy ở nền, độc lập với trang web
-- **Nhiệm vụ**: Quản lý trạng thái, xử lý logic (dự đoán văn bản, kiểm tra trang web), lưu trữ cài đặt
-- **Vòng đời**: Hoạt động liên tục khi extension được kích hoạt
+- **Nhiệm vụ**: Quản lý trạng thái, xử lý logic (nhắc nghỉ, kiểm tra trang web), lưu trữ cài đặt
+- **Vòng đời**: MV3 Service Worker (có thể ngủ/được đánh thức theo event: message, webNavigation, alarms...)
 - **Giao tiếp**: Tương tác với tất cả content scripts, quản lý API trình duyệt
 - **API**: Truy cập đầy đủ API Chrome (tabs, storage, alerts, network)
 
@@ -54,7 +54,7 @@ Extension sử dụng hệ thống truyền tin để giao tiếp giữa các th
 // Từ content.js đến background.js
 sendMessageSafely({
   action: 'checkCurrentUrl',
-  data: { url: window.location.href, isInFlow: true }
+  data: { url: window.location.href }
 });
 
 // Từ background.js đến content.js

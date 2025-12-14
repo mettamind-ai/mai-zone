@@ -7,9 +7,9 @@
  * @feature f05 - State Management
  */
 
-import { initState, setupStateListeners, getState } from './background_state.js';
+import { initState, setupStateListeners } from './background_state.js';
 import { initDistraction } from './background_distraction.js';
-import { initBreakReminder, handleNotificationButtonClick, sendBreakReminder, startBreakReminder } from './background_breakReminder.js';
+import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
@@ -45,9 +45,6 @@ function setupEventListeners() {
   // Handle extension installation or update
   chrome.runtime.onInstalled.addListener(onInstalledListener);
   
-  // Handle notification button clicks
-  chrome.notifications.onButtonClicked.addListener(handleNotificationButtonClick);
-  
   // Handle keyboard commands
   chrome.commands.onCommand.addListener(handleCommand);
 }
@@ -59,17 +56,8 @@ function handleCommand(command) {
   console.log('🌸 Command received:', command);
   
   if (command === 'test-break-reminder') {
-    // Check if deep work is active first
-    const state = getState();    
-    if (state.isInFlow && state.breakReminderEnabled) {
-      console.log('🌸 Deep work active, setting timer to 10 seconds');      
-      startBreakReminder(10 * 1000); // 10 seconds in milliseconds
-      chrome.action.setBadgeText({ text: '00:10' });
-    } else {
-      // Normal behavior - use direct function reference
-      sendBreakReminder();
-      console.log('🌸 Break reminder sent successfully');
-    }
+    sendBreakReminder();
+    console.log('🌸 Break reminder sent successfully');
   }
 }
 

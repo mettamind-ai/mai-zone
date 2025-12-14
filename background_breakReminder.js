@@ -1,6 +1,6 @@
 /**
  * MaiZone Browser Extension
- * Break Reminder Module: Manages break reminders and timer
+ * Break Reminder Module: Manages break reminders and MV3-safe timers via chrome.alarms
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode (timer integration)
  */
@@ -8,19 +8,28 @@
 import { getState, updateState } from './background_state.js';
 import { BREAK_REMINDER_INTERVAL, BREAK_REMINDER_MESSAGES } from './constants.js';
 
-// Timer ID for break reminder
-let breakReminderTimerId = null;
+/***** ALARM NAMES *****/
+
+const BREAK_REMINDER_END_ALARM = 'maizone_breakReminderEnd';
+const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
+
+/***** INITIALIZATION *****/
 
 /**
- * Initialize break reminder module
+ * Initialize break reminder module.
+ * @returns {void}
  */
 export function initBreakReminder() {
   setupMessageListeners();
+  setupAlarmListeners();
   initializeBreakReminderIfEnabled();
 }
 
+/***** MESSAGING *****/
+
 /**
- * Setup message listeners for break reminder commands
+ * Setup message listeners for break reminder commands.
+ * @returns {void}
  */
 function setupMessageListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -28,14 +37,17 @@ function setupMessageListeners() {
       resetBreakReminder(message.data, sendResponse);
       return true;
     }
-    else if (message.action === 'getBreakReminderState') {
+
+    if (message.action === 'getBreakReminderState') {
       getBreakReminderState(sendResponse);
       return true;
     }
-    else if (message.action === 'stateUpdated') {
+
+    if (message.action === 'stateUpdated') {
       handleStateUpdated(message.state);
       return false;
     }
+
     return false;
   });
 }
@@ -60,244 +72,268 @@ function handleStateUpdated(updates) {
   chrome.action.setBadgeText({ text: '' });
 }
 
+/***** ALARMS *****/
+
 /**
- * Initialize break reminder if enabled
+ * Setup alarm listeners (MV3-safe timers).
+ * @returns {void}
  */
-function initializeBreakReminderIfEnabled() {
-  const { breakReminderEnabled, isEnabled, reminderStartTime, reminderInterval } = getState();
-  
-  if (breakReminderEnabled && isEnabled) {
-    // If there's an existing timer that hasn't expired, resume it
-    if (reminderStartTime) {
-      const now = Date.now();
-      const elapsed = now - reminderStartTime;
-      const interval = reminderInterval || BREAK_REMINDER_INTERVAL;
-      
-      // If the timer hasn't expired yet, resume with remaining time
-      if (elapsed < interval) {
-        const remaining = interval - elapsed;
-        console.log(`🌸 Resuming timer with ${Math.round(remaining/1000)} seconds remaining`);
-        startBreakReminder(remaining);
-        return;
-      }
-    }
-    
-    // Start a new timer
-    startBreakReminder();
+function setupAlarmListeners() {
+  if (!chrome?.alarms?.onAlarm) {
+    console.warn('🌸🌸🌸 chrome.alarms API unavailable; break reminders may be unreliable.');
+    return;
+  }
+
+  if (!chrome.alarms.onAlarm.hasListener(handleAlarm)) {
+    chrome.alarms.onAlarm.addListener(handleAlarm);
   }
 }
 
 /**
- * Update badge with timer display
+ * Alarm event handler.
+ * @param {chrome.alarms.Alarm} alarm - Alarm object
+ * @returns {void}
+ */
+function handleAlarm(alarm) {
+  if (!alarm?.name) return;
+
+  if (alarm.name === BREAK_REMINDER_BADGE_ALARM) {
+    updateBadgeWithTimerDisplay();
+    return;
+  }
+
+  if (alarm.name === BREAK_REMINDER_END_ALARM) {
+    handleBreakReminderEnd();
+  }
+}
+
+/**
+ * Schedule end + badge alarms for the current session.
+ * @param {number} expectedEndTime - Epoch ms timestamp
+ * @returns {void}
+ */
+function scheduleBreakReminderAlarms(expectedEndTime) {
+  if (!chrome?.alarms) return;
+  if (typeof expectedEndTime !== 'number' || !Number.isFinite(expectedEndTime)) return;
+
+  try {
+    chrome.alarms.create(BREAK_REMINDER_END_ALARM, { when: expectedEndTime });
+
+    // Keep badge roughly in sync without relying on long-lived timers.
+    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
+  } catch (error) {
+    console.error('🌸🌸🌸 Error scheduling break reminder alarms:', error);
+  }
+}
+
+/**
+ * Clear all break reminder alarms.
+ * @returns {void}
+ */
+function stopBreakReminder() {
+  try {
+    chrome.alarms?.clear(BREAK_REMINDER_END_ALARM);
+    chrome.alarms?.clear(BREAK_REMINDER_BADGE_ALARM);
+  } catch (error) {
+    console.warn('🌸🌸🌸 Error clearing break reminder alarms:', error);
+  }
+}
+
+/***** TIMER CORE *****/
+
+/**
+ * Initialize break reminder if enabled (service worker restart safe).
+ * @returns {void}
+ */
+function initializeBreakReminderIfEnabled() {
+  const {
+    breakReminderEnabled,
+    isEnabled,
+    isInFlow,
+    currentTask,
+    reminderStartTime,
+    reminderInterval,
+    reminderExpectedEndTime
+  } = getState();
+
+  if (!breakReminderEnabled || !isEnabled || !isInFlow || !currentTask) {
+    stopBreakReminder();
+    chrome.action.setBadgeText({ text: '' });
+    return;
+  }
+
+  const interval = reminderInterval || BREAK_REMINDER_INTERVAL;
+  const startTime = reminderStartTime || Date.now();
+  const expectedEndTime = reminderExpectedEndTime || (startTime + interval);
+
+  if (Date.now() >= expectedEndTime) {
+    handleBreakReminderEnd();
+    return;
+  }
+
+  if (!reminderStartTime || !reminderExpectedEndTime || !reminderInterval) {
+    updateState({
+      reminderStartTime: startTime,
+      reminderInterval: interval,
+      reminderExpectedEndTime: expectedEndTime
+    });
+  }
+
+  scheduleBreakReminderAlarms(expectedEndTime);
+  updateBadgeWithTimerDisplay();
+}
+
+/**
+ * Update badge with timer display.
+ * @returns {void}
  */
 function updateBadgeWithTimerDisplay() {
   const { reminderStartTime, reminderInterval, isInFlow } = getState();
-  
+
   if (!isInFlow || !reminderStartTime || !reminderInterval) {
+    chrome.action.setBadgeText({ text: '' });
     return;
   }
-  
+
   const now = Date.now();
   const elapsed = now - reminderStartTime;
   const remaining = reminderInterval - elapsed;
-  
+
   if (remaining <= 0) {
     chrome.action.setBadgeText({ text: '00:00' });
     return;
   }
-  
+
   const minutes = Math.floor(remaining / 60000).toString().padStart(2, '0');
   const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
-  
+
   chrome.action.setBadgeText({ text: `${minutes}:${seconds}` });
 }
 
 /**
- * Start break reminder timer
- * @feature f03 - Break Reminder
+ * Start break reminder timer (MV3-safe via alarms).
+ * @param {number} [customInterval] - Custom interval in ms
+ * @returns {void}
  */
-export function startBreakReminder(customInterval) {
-  // Stop existing timer
+function startBreakReminder(customInterval) {
   stopBreakReminder();
-  
-  const interval = customInterval || BREAK_REMINDER_INTERVAL;
-  console.debug(`🌸 Starting break reminder timer (${interval / 1000 / 60} minutes)`);
-  
-  // Store the start time and interval
+
+  const { isEnabled, isInFlow, currentTask, breakReminderEnabled } = getState();
+  if (!isEnabled || !isInFlow || !currentTask || !breakReminderEnabled) {
+    chrome.action.setBadgeText({ text: '' });
+    return;
+  }
+
+  const interval =
+    typeof customInterval === 'number' && Number.isFinite(customInterval) && customInterval > 0
+      ? customInterval
+      : BREAK_REMINDER_INTERVAL;
+
   const reminderStartTime = Date.now();
   const reminderExpectedEndTime = reminderStartTime + interval;
-  
-  // Update state
-  updateState({ 
+
+  updateState({
     reminderStartTime,
     reminderInterval: interval,
     reminderExpectedEndTime
   });
-  
-  // Initialize badge with timer
+
+  scheduleBreakReminderAlarms(reminderExpectedEndTime);
   updateBadgeWithTimerDisplay();
-  
-  // Set up the timer
-  const checkTimerInterval = Math.min(3000, interval / 20); // Check every 3 seconds
-  
-  const checkBreakReminder = function() {
-    breakReminderTimerId = null;
-
-    const now = Date.now();
-    console.log('🌸 Checking break reminder at:', new Date(now).toLocaleTimeString());
-    
-    const { 
-      reminderStartTime, 
-      reminderInterval, 
-      reminderExpectedEndTime, 
-      isInFlow, 
-      currentTask
-    } = getState();
-    
-    if (!reminderStartTime) return;
-    
-    // Check if still in flow state
-    if (!isInFlow || !currentTask) {
-      console.log('🌸 Not in flow state anymore, updating break reminder state');
-      updateState({ isInFlow: false, currentTask: '' });
-      // Clear badge
-      chrome.action.setBadgeText({ text: '' });
-      return;
-    }
-    
-    const elapsed = now - reminderStartTime;
-    const timeLeft = reminderInterval - elapsed;
-    
-    console.log(`🌸 Time left: ${Math.floor(timeLeft/1000)}s, Expected end: ${new Date(reminderExpectedEndTime).toLocaleTimeString()}`);
-    
-    // Update badge with timer
-    updateBadgeWithTimerDisplay();
-    
-    // If timer has expired
-    if (timeLeft <= 0 || now >= reminderExpectedEndTime) {
-      console.log('🌸 Break time reached! Sending reminder...');
-      try {
-        sendBreakReminder();
-        
-        // Reset deep work state
-        updateState({
-          isInFlow: false,
-          currentTask: '',
-          breakReminderEnabled: false
-        });
-        
-        // Clear badge
-        chrome.action.setBadgeText({ text: '' });
-      } catch (error) {
-        console.error('🌸🌸🌸 Error in timer trigger:', error);
-        // Restart timer even if reminder fails
-        startBreakReminder();
-      }
-    } else {
-      // Continue checking
-      const nextCheck = Math.min(checkTimerInterval, timeLeft + 500);
-      console.log(`🌸 Next check in: ${nextCheck/1000}s`);
-      breakReminderTimerId = setTimeout(checkBreakReminder, nextCheck);
-    }
-  };
-  
-  // Start the check cycle
-  breakReminderTimerId = setTimeout(checkBreakReminder, checkTimerInterval);
-  console.log('🌸 Break reminder started with ID:', breakReminderTimerId);
 }
 
 /**
- * Stop break reminder timer
+ * Handle timer end alarm (end Deep Work cycle + notify user).
+ * @returns {void}
  */
-function stopBreakReminder() {
-  if (breakReminderTimerId) {
-    clearTimeout(breakReminderTimerId);
-    breakReminderTimerId = null;
-    console.debug('🌸 Break reminder timer stopped');
+function handleBreakReminderEnd() {
+  const { isEnabled, isInFlow, currentTask, breakReminderEnabled, reminderExpectedEndTime } = getState();
+
+  // No longer valid -> just cleanup.
+  if (!isEnabled || !isInFlow || !currentTask || !breakReminderEnabled) {
+    stopBreakReminder();
+    chrome.action.setBadgeText({ text: '' });
+    return;
   }
+
+  const now = Date.now();
+  if (
+    typeof reminderExpectedEndTime === 'number' &&
+    Number.isFinite(reminderExpectedEndTime) &&
+    now < reminderExpectedEndTime
+  ) {
+    // Alarm can fire early/late; reschedule if early.
+    scheduleBreakReminderAlarms(reminderExpectedEndTime);
+    updateBadgeWithTimerDisplay();
+    return;
+  }
+
+  console.log('🌸 Break time reached! Ending Deep Work cycle...');
+
+  // End cycle first so popup resets deterministically.
+  updateState({
+    isInFlow: false,
+    currentTask: '',
+    breakReminderEnabled: false
+  });
+
+  stopBreakReminder();
+  chrome.action.setBadgeText({ text: '' });
+
+  showBreakReminderNotification();
 }
 
+/***** NOTIFICATIONS *****/
+
 /**
- * Send break reminder notification
+ * Send break reminder notification (manual test entrypoint).
  * @feature f03 - Break Reminder
+ * @returns {void}
  */
 export function sendBreakReminder() {
   console.debug('🌸 Break reminder triggered');
-  
-  // Check if the flow cycle has ended
-  const { isInFlow, currentTask } = getState();
-  
-  // If cycle completed, disable break reminder
-  if (!isInFlow || !currentTask) {
-    console.log('🌸 Flow cycle completed - disabling break reminder');
-    updateState({ breakReminderEnabled: false });
-  }
-  
-  // Show notification
   showBreakReminderNotification();
 }
 
 /**
- * Show break reminder notification
+ * Show break reminder notification.
+ * @returns {void}
  */
 function showBreakReminderNotification() {
-  // Get a random message
   const randomMessage = BREAK_REMINDER_MESSAGES[Math.floor(Math.random() * BREAK_REMINDER_MESSAGES.length)];
   console.log('🌸 Selected random message:', randomMessage);
-  
+
+  const options = {
+    type: 'basic',
+    iconUrl: 'icon.png',
+    title: '🌸 Nghỉ xíu nhỉ! ✨',
+    message: randomMessage,
+    priority: 2
+  };
+
   try {
-    chrome.notifications.create('break-reminder-notification', {
-      type: 'basic',
-      iconUrl: 'icon.png',
-      title: '🌸 Nghỉ xíu nhỉ! ✨',
-      message: randomMessage,
-      priority: 2,
-      buttons: [{ title: 'Okieee, chill! 👌' }, { title: 'Nhắc lại sau, đang gấp! ⏱️' }]
-    }, (notificationId) => {
-      if (chrome.runtime.lastError) {
-        console.error('🌸🌸🌸 Error creating notification:', chrome.runtime.lastError);
-        
-        // Retry with alternative ID
-        setTimeout(() => {
-          chrome.notifications.create('break-reminder-notification-alt', {
-            type: 'basic',
-            iconUrl: 'icon.png',
-            title: '🌸 Nghỉ xíu nhỉ! ✨',
-            message: randomMessage,
-            priority: 2,
-            buttons: [{ title: 'Okieee, chill! 👌' }, { title: 'Nhắc lại sau, đang gấp! ⏱️' }]
-          });
-        }, 1000);
-      }
-      
-      // Check if still in flow state and restart timer if needed
-      const { isInFlow, breakReminderEnabled } = getState();
-      if (isInFlow && breakReminderEnabled) {
-        startBreakReminder();
-      }
+    chrome.notifications.create('break-reminder-notification', options, () => {
+      if (!chrome.runtime.lastError) return;
+
+      console.error('🌸🌸🌸 Error creating notification:', chrome.runtime.lastError);
+      chrome.notifications.create('break-reminder-notification-alt', options);
     });
-    
+
     console.info('🌸 Break reminder sent');
   } catch (error) {
     console.error('🌸🌸🌸 Error in sendBreakReminder:', error);
   }
 }
 
-/**
- * Handle notification button click
- */
-export function handleNotificationButtonClick(notificationId, buttonIndex) {
-  if (buttonIndex === 1) {
-    // Remind again in 10 minutes
-    console.debug('🌸 User requested reminder delay for 10 minutes');
-    startBreakReminder(10 * 60 * 1000); // 10 minutes
-  }
-}
+/***** PUBLIC ACTIONS *****/
 
 /**
- * Reset break reminder timer with new task
+ * Reset break reminder timer with new task.
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
+ * @param {Object} data - Payload from popup
+ * @param {Function} sendResponse - Chrome response callback
+ * @returns {void}
  */
 function resetBreakReminder(data, sendResponse) {
   try {
@@ -314,74 +350,61 @@ function resetBreakReminder(data, sendResponse) {
       isInFlow: true,
       breakReminderEnabled: true
     });
-    
-    // Reset the timer to 40 minutes
+
     startBreakReminder();
-    
-    // Send success response
-    if (sendResponse) {
-      sendResponse({ success: true });
-    }
+
+    sendResponse?.({ success: true });
   } catch (error) {
     console.error('🌸🌸🌸 Error in resetBreakReminder:', error);
-    if (sendResponse) {
-      sendResponse({ success: false, error: error.message });
-    }
+    sendResponse?.({ success: false, error: error?.message || String(error) });
   }
 }
 
 /**
- * Get current break reminder state
+ * Get current break reminder state.
+ * @param {Function} sendResponse - Chrome response callback
+ * @returns {void}
  */
 function getBreakReminderState(sendResponse) {
-  const { 
-    breakReminderEnabled, 
-    reminderStartTime, 
-    reminderInterval, 
-    reminderExpectedEndTime, 
-    isInFlow, 
-    currentTask 
+  const {
+    breakReminderEnabled,
+    reminderStartTime,
+    reminderInterval,
+    reminderExpectedEndTime,
+    isEnabled,
+    isInFlow,
+    currentTask
   } = getState();
-  
-  // If not in flow state, should not have timer running
-  if (!isInFlow || !currentTask) {
-    if (breakReminderEnabled) {
-      console.log('🌸 Not in flow but break reminder is enabled. Disabling it.');
-      updateState({ breakReminderEnabled: false });
-    }
-    
+
+  const isActive = !!(isEnabled && isInFlow && currentTask && breakReminderEnabled);
+
+  if (!isActive) {
     sendResponse({
       enabled: false,
       startTime: null,
-      interval: BREAK_REMINDER_INTERVAL
+      interval: BREAK_REMINDER_INTERVAL,
+      expectedEndTime: null
     });
     return;
   }
-  
-  // Check if break reminder is enabled but timer not started
-  if (breakReminderEnabled && !reminderStartTime && isInFlow) {
-    // Start a new timer
-    if (!breakReminderTimerId) {
-      console.log('🌸 Timer enabled but not started. Starting now.');
-      startBreakReminder();
-      
-      // Get updated values
-      const newState = getState();
-      sendResponse({
-        enabled: true,
-        startTime: newState.reminderStartTime,
-        interval: newState.reminderInterval || BREAK_REMINDER_INTERVAL,
-        expectedEndTime: newState.reminderExpectedEndTime
-      });
-      return;
-    }
+
+  if (!reminderStartTime || !reminderExpectedEndTime) {
+    startBreakReminder(reminderInterval || BREAK_REMINDER_INTERVAL);
+    const newState = getState();
+    sendResponse({
+      enabled: true,
+      startTime: newState.reminderStartTime,
+      interval: newState.reminderInterval || BREAK_REMINDER_INTERVAL,
+      expectedEndTime: newState.reminderExpectedEndTime
+    });
+    return;
   }
-  
-  // Send current state
+
   sendResponse({
-    enabled: breakReminderEnabled,
+    enabled: true,
     startTime: reminderStartTime,
     interval: reminderInterval || BREAK_REMINDER_INTERVAL,
     expectedEndTime: reminderExpectedEndTime
   });
 }
+
