@@ -6,6 +6,7 @@
 
 import { getState, updateState } from './background_state.js';
 import { TEXT_PREDICTION_CONFIG, GEMINI_CONFIG } from './constants.js';
+import { sendMessageToTabSafely } from './messaging.js';
 
 // Store last API call time for rate limiting
 let lastApiCallTime = 0;
@@ -71,7 +72,6 @@ function createPredictionPrompt(context) {
   Trả lời CHÍNH XÁC những gì bạn nghĩ người dùng sẽ nhập tiếp theo, không thêm bất kỳ giải thích nào.
   Chỉ trả về phần tiếp theo của nội dung, không lặp lại phần đã có.`;
   
-  console.log('🌸 Prompt for LLM:', prompt);
   return prompt;
 }
 
@@ -129,7 +129,6 @@ async function predictUserInput(context, apiKey) {
     }
 
     const result = await response.json();
-    console.log('🌸 Raw API response:', result);
 
     // Extract text from the response
     const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -137,10 +136,9 @@ async function predictUserInput(context, apiKey) {
       throw new Error('No text generated from API response');
     }
 
-    console.log('🌸 Generated text:', generatedText);
     return formatPrediction(generatedText);
   } catch (error) {
-    console.error('🌸 Error calling Gemini API:', error);
+    console.error('🌸🌸🌸 Error calling Gemini API:', error);
     return null;
   }
 }
@@ -154,7 +152,16 @@ async function onRequestTextPrediction(data, tab, sendResponse) {
     return;
   }
 
-  console.log('🌸 Received text prediction request:', data);
+  try {
+    const urlHost = data?.url ? new URL(data.url).hostname.replace(/^www\./, '') : 'unknown';
+    console.log('🌸 Received text prediction request:', {
+      urlHost,
+      inputType: data?.inputType,
+      currentLength: data?.currentContent?.length || 0
+    });
+  } catch (logError) {
+    console.log('🌸 Received text prediction request');
+  }
 
   try {
     // Check if feature is enabled
@@ -183,14 +190,13 @@ async function onRequestTextPrediction(data, tab, sendResponse) {
     }
 
     // Call API for prediction
-    console.log('🌸 Calling predictUserInput with context:', JSON.stringify(data));
     const suggestion = await predictUserInput(data, apiKey);
     if (!suggestion) {
-      console.error('🌸 Failed to get prediction');
+      console.error('🌸🌸🌸 Failed to get prediction');
       sendResponse({ success: false, error: 'Failed to get prediction' });
       return;
     }
-    console.log('🌸 Got suggestion from API:', suggestion);
+    console.log('🌸 Got suggestion from API');
 
     // Send result to content script
     await sendMessageToTabSafely(tab.id, {
@@ -200,7 +206,7 @@ async function onRequestTextPrediction(data, tab, sendResponse) {
 
     sendResponse({ success: true });
   } catch (error) {
-    console.error('🌸 Error in text prediction:', error);
+    console.error('🌸🌸🌸 Error in text prediction:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -211,7 +217,7 @@ async function onRequestTextPrediction(data, tab, sendResponse) {
 function onSuggestionAccepted(data) {
   if (!data?.suggestion) return;
   
-  console.debug('🌸 User accepted suggestion:', data.suggestion);
+  console.debug('🌸 User accepted suggestion:', { length: data.suggestion.length });
   // Could add analytics or storage for improving suggestions in the future
 }
 
@@ -231,7 +237,7 @@ function onToggleTextPrediction(data, sendResponse) {
       sendResponse({ success: true });
     })
     .catch(error => {
-      console.error('🌸 Error toggling text prediction:', error);
+      console.error('🌸🌸🌸 Error toggling text prediction:', error);
       sendResponse({ success: false, error: error.message });
     });
 }
@@ -249,31 +255,22 @@ async function getApiKey(provider) {
     const { geminiKey } = getState();
 
     if (!geminiKey) {
-      console.warn('🌸🌸🌸 No Gemini API key found');
-      return null;
+      const stored = await new Promise((resolve) => {
+        chrome.storage.local.get(['geminiKey'], (data) => resolve(data || {}));
+      });
+
+      if (!stored.geminiKey) {
+        console.warn('🌸🌸🌸 No Gemini API key found');
+        return null;
+      }
+
+      return stored.geminiKey;
     }
 
     // Stored as plain text
     return geminiKey;
   } catch (error) {
-    console.error('🌸 Error getting Gemini API key:', error);
-    return null;
-  }
-}
-
-/**
- * Helper function for safe message sending to tabs
- */
-async function sendMessageToTabSafely(tabId, message) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, message);
-  } catch (error) {
-    const errorMessage = error?.message || String(error);
-    if (errorMessage.includes('Extension context invalidated')) {
-      // Expected during page unload or extension update
-      return null;
-    }
-    console.warn('🌸🌸🌸 Failed to send message to tab:', error);
+    console.error('🌸🌸🌸 Error getting Gemini API key:', error);
     return null;
   }
 }

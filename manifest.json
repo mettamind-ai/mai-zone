@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MaiZone",
   "version": "0.0.3",
-  "description": "MaiZone (🌸) - Do one thing at a time.",
+  "description": "MaiZone (🌸) - Mỗi lần làm một việc.",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -29,7 +29,7 @@
       "suggested_key": {
         "default": "Alt+A"
       },
-      "description": "Test break reminder notification"
+      "description": "Thử nhắc nghỉ ngơi"
     }
   },
   "background": {

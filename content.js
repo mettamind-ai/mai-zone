@@ -7,17 +7,8 @@
  * @feature f04c - Deep Work Mode Integration
  */
 
-// Define global configuration with const for better encapsulation
-const TEXT_PREDICTION_CONFIG = {
-  // Delay before showing suggestion (ms)
-  DELAY_BEFORE_SUGGESTION: 800,
-  // Minimum characters to trigger prediction
-  MIN_CHARS_TO_TRIGGER: 2,
-  // Minimum time between API calls (ms)
-  MIN_TIME_BETWEEN_CALLS: 3000,
-  // Maximum suggestion length to display
-  MAX_SUGGESTION_LENGTH: 50
-};
+import { TEXT_PREDICTION_CONFIG } from './constants.js';
+import { sendMessageSafely } from './messaging.js';
 
 /******************************************************************************
  * VARIABLES AND CONFIGURATION
@@ -35,15 +26,6 @@ let typingTimer = null;
 let predictionTimer = null;
 let suggestionElement = null;
 let isPredicting = false;
-
-/**
- * Tải các phụ thuộc cần thiết cho content script
- * @returns {Promise<boolean>} Promise resolving to true indicating successful loading
- */
-function loadDependencies() {
-  console.log('🌸 Using built-in configuration values');
-  return Promise.resolve(true);
-}
 
 /******************************************************************************
  * INITIALIZATION
@@ -86,49 +68,6 @@ function initialize() {
   });
 }
 
-/**
- * Helper function for safe message sending
- * @param {Object} message - Message object to send to background script
- * @returns {Promise<any>} - Response from background script or null on error
- */
-async function sendMessageSafely(message) {
-  try {
-    if (!chrome.runtime || chrome.runtime.id === undefined) {
-      return null;
-    }
-
-    const response = await new Promise((resolve) => {
-      const timeoutId = setTimeout(() => resolve(null), 2000);
-
-      try {
-        chrome.runtime.sendMessage(message, (reply) => {
-          clearTimeout(timeoutId);
-
-          const lastError = chrome.runtime.lastError;
-          if (lastError) {
-            resolve(null);
-            return;
-          }
-
-          resolve(reply);
-        });
-      } catch (innerError) {
-        clearTimeout(timeoutId);
-        resolve(null);
-      }
-    });
-
-    return response;
-  } catch (error) {
-    const errorMessage = error?.message || String(error);
-    if (errorMessage.includes('Extension context invalidated')) {
-      // Expected during page unload or extension update - ignore silently
-      return null;
-    }
-    console.warn('🌸🌸🌸 Failed to send message:', error);
-    return null;
-  }
-}
 
 /******************************************************************************
  * EVENT HANDLERS
@@ -248,7 +187,7 @@ function captureCurrentContent(shouldPredict = false) {
   if (!currentElement) return;
   const currentContentValue = getCurrentElementContent();
   if (currentContentValue !== lastContent) {
-    console.log('🌸 Content updated:', currentContentValue);
+    console.debug('🌸 Content updated (len):', currentContentValue.length);
     lastContent = currentContentValue;
     
     const MIN_CHARS = TEXT_PREDICTION_CONFIG?.MIN_CHARS_TO_TRIGGER || DEFAULT_MIN_CHARS;
@@ -395,24 +334,75 @@ function showDistractionWarning(data) {
   // Tùy chỉnh icon và nội dung dựa trên loại cảnh báo
   const icon = data.isDeepWorkBlocked && data.isInDeepWorkMode ? '⚡' : '🌸';
   const messageText = data.message || 'Mai nhận thấy đây là trang web gây sao nhãng. Bạn có thật sự muốn tiếp tục?';
-  
-  warningDiv.innerHTML = `
-    <div style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
-      <span style="font-size: 48px;">${icon}</span>
-      <span style="font-size: 24px; margin: 20px 0;">${messageText}</span>
-      <div id="mai-countdown" style="font-size: 20px; margin: 10px 0;">Tab sẽ tự đóng sau <span style="font-weight: bold;">5</span> giây</div>
-      <div style="display: flex; gap: 20px; margin-top: 20px;">
-        <button id="mai-continue-btn" 
-          style="background-color: white; color: ${data.isDeepWorkBlocked && data.isInDeepWorkMode ? '#8a2be2' : '#FF8FAB'}; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 18px;">
-          Tiếp tục
-        </button>
-        <button id="mai-back-btn" 
-          style="background-color: ${data.isDeepWorkBlocked && data.isInDeepWorkMode ? '#8a2be2' : '#FF8FAB'}; color: white; border: 2px solid white; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 18px;">
-          Đóng
-        </button>
-      </div>
-    </div>
-  `;
+
+  const container = document.createElement('div');
+  Object.assign(container.style, {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '20px'
+  });
+
+  const iconEl = document.createElement('span');
+  iconEl.textContent = icon;
+  iconEl.style.fontSize = '48px';
+
+  const messageEl = document.createElement('span');
+  messageEl.textContent = messageText;
+  Object.assign(messageEl.style, { fontSize: '24px', margin: '20px 0' });
+
+  const countdownDiv = document.createElement('div');
+  countdownDiv.id = 'mai-countdown';
+  Object.assign(countdownDiv.style, { fontSize: '20px', margin: '10px 0' });
+  countdownDiv.append('Tab sẽ tự đóng sau ');
+  const countdownSpan = document.createElement('span');
+  countdownSpan.textContent = '5';
+  countdownSpan.style.fontWeight = 'bold';
+  countdownDiv.appendChild(countdownSpan);
+  countdownDiv.append(' giây');
+
+  const buttonsRow = document.createElement('div');
+  Object.assign(buttonsRow.style, { display: 'flex', gap: '20px', marginTop: '20px' });
+
+  const accentColor = data.isDeepWorkBlocked && data.isInDeepWorkMode ? '#8a2be2' : '#FF8FAB';
+
+  const continueBtn = document.createElement('button');
+  continueBtn.id = 'mai-continue-btn';
+  continueBtn.type = 'button';
+  continueBtn.textContent = 'Tiếp tục';
+  Object.assign(continueBtn.style, {
+    backgroundColor: 'white',
+    color: accentColor,
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '18px'
+  });
+
+  const backBtn = document.createElement('button');
+  backBtn.id = 'mai-back-btn';
+  backBtn.type = 'button';
+  backBtn.textContent = 'Đóng';
+  Object.assign(backBtn.style, {
+    backgroundColor: accentColor,
+    color: 'white',
+    border: '2px solid white',
+    padding: '12px 24px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '18px'
+  });
+
+  buttonsRow.appendChild(continueBtn);
+  buttonsRow.appendChild(backBtn);
+
+  container.appendChild(iconEl);
+  container.appendChild(messageEl);
+  container.appendChild(countdownDiv);
+  container.appendChild(buttonsRow);
+
+  warningDiv.appendChild(container);
 
   document.body.appendChild(warningDiv);
   setupWarningButtons(warningDiv);
@@ -422,15 +412,15 @@ function showDistractionWarning(data) {
  * Setup buttons for distraction warning
  */
 function setupWarningButtons(warningDiv) {
-  const continueBtn = document.getElementById('mai-continue-btn');
-  const backBtn = document.getElementById('mai-back-btn');
-  const countdownEl = document.getElementById('mai-countdown').querySelector('span');
+  const continueBtn = warningDiv?.querySelector?.('#mai-continue-btn');
+  const backBtn = warningDiv?.querySelector?.('#mai-back-btn');
+  const countdownEl = warningDiv?.querySelector?.('#mai-countdown span');
 
   let secondsLeft = 5;
   const countdownInterval = setInterval(() => {
     secondsLeft--;
     if (secondsLeft > 0) {
-      countdownEl.textContent = secondsLeft;
+      if (countdownEl) countdownEl.textContent = secondsLeft;
     } else {
       clearInterval(countdownInterval);
       sendMessageSafely({ action: 'closeTab' });
@@ -504,7 +494,7 @@ function requestTextPrediction() {
     if (!currentContent || currentContent.length < MIN_CHARS) return;
     
     isPredicting = true;
-    console.log('🌸 Requesting text prediction for:', currentContent);
+    console.log('🌸 Requesting text prediction:', { length: currentContent.length });
     
     sendMessageSafely({
       action: 'requestTextPrediction',
@@ -530,7 +520,7 @@ function requestTextPrediction() {
 function handlePredictionResult(data) {
   if (!data?.suggestion || !currentElement) return;
   
-  console.log('🌸 Received text prediction:', data.suggestion);
+  console.log('🌸 Received text prediction:', { length: data.suggestion.length });
   
   if (suggestionElement) {
     positionSuggestionElement();
@@ -731,10 +721,4 @@ function observeYouTubeNavigation() {
  * SCRIPT INITIALIZATION
  ******************************************************************************/
 
-loadDependencies().then(success => {
-  if (success) {
-    initialize();
-  } else {
-    console.error('🌸🌸🌸 Cannot initialize content script due to missing dependencies');
-  }
-});
+initialize();

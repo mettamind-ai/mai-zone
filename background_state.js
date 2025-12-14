@@ -41,7 +41,7 @@ export async function initState() {
     console.log('🌸 State initialized:', state);
     return state;
   } catch (error) {
-    console.error('🌸 Error initializing state:', error);
+    console.error('🌸🌸🌸 Error initializing state:', error);
     return state;
   }
 }
@@ -74,16 +74,20 @@ export async function updateState(updates) {
     });
     
     // Broadcast state update to other parts of the extension
-    chrome.runtime.sendMessage({ 
-      action: 'stateUpdated', 
-      state: updates
-    }).catch(() => {
-      // Ignore errors from no listeners
-    });
+    try {
+      chrome.runtime.sendMessage({
+        action: 'stateUpdated',
+        state: updates
+      }).catch(() => {
+        // Ignore errors from no listeners / SW lifecycle
+      });
+    } catch (broadcastError) {
+      // Ignore broadcast errors during invalidation
+    }
     
     return true;
   } catch (error) {
-    console.error('🌸 Error updating state:', error);
+    console.error('🌸🌸🌸 Error updating state:', error);
     return false;
   }
 }
@@ -92,14 +96,28 @@ export async function updateState(updates) {
 export function setupStateListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'getState') {
+      if (Array.isArray(message.keys)) {
+        const subset = {};
+        message.keys.forEach((k) => {
+          subset[k] = state[k];
+        });
+        sendResponse(subset);
+        return true;
+      }
+
       const requestedState = message.key ? { [message.key]: state[message.key] } : state;
       sendResponse(requestedState);
       return true;
     } 
     else if (message.action === 'updateState') {
+      if (!message.payload || typeof message.payload !== 'object') {
+        sendResponse({ success: false, error: 'Invalid payload' });
+        return true;
+      }
+
       updateState(message.payload)
         .then(() => sendResponse({ success: true }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .catch(error => sendResponse({ success: false, error: error?.message || String(error) }));
       return true; // Keep channel open for async response
     }
     return false;

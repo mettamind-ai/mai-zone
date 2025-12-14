@@ -5,6 +5,8 @@
  * @feature f04 - Deep Work Mode (UI part)
  */
 
+import { sendMessageSafely } from './messaging.js';
+
 /******************************************************************************
  * ELEMENT REFERENCES AND VARIABLES
  ******************************************************************************/
@@ -114,7 +116,7 @@ function loadState() {
       }
     })
     .catch(error => {
-      console.error('🌸 Error loading state:', error);
+      console.error('🌸🌸🌸 Error loading state:', error);
       // Fallback to storage
       chrome.storage.local.get(null, (data) => {
         if (data && Object.keys(data).length > 0) {
@@ -139,7 +141,7 @@ function updateUI(state) {
   
   // Update task label if in deep work
   if (state.isInFlow) {
-    setBreakReminderLabelText('Deep Working...');
+    setBreakReminderLabelText('Đang Deep Work...');
   }
   
   // Update enabled state UI
@@ -168,7 +170,7 @@ function handleStateUpdate(updates) {
     taskInput.disabled = updates.isInFlow;
     
     // Update task label
-    setBreakReminderLabelText(updates.isInFlow ? 'Deep Working...' : 'Deep Work Time Block');
+    setBreakReminderLabelText(updates.isInFlow ? 'Đang Deep Work...' : 'Khung Deep Work');
   }
   
   if ('currentTask' in updates) {
@@ -232,7 +234,7 @@ function handleToggle(settingKey) {
     taskInput.disabled = false;
     
     // Reset label
-    setBreakReminderLabelText('Deep Work Time Block');
+    setBreakReminderLabelText('Khung Deep Work');
     
     // Clear badge
     chrome.action.setBadgeText({ text: '' });
@@ -294,7 +296,7 @@ function setCurrentTask() {
     breakReminderToggle.checked = true;
     
     // Update label
-    setBreakReminderLabelText('Deep Working...');
+    setBreakReminderLabelText('Đang Deep Work...');
     
     // Update status message temporarily
     statusText.textContent = `Mai sẽ giúp bạn tập trung vào: ${task}`;
@@ -349,7 +351,7 @@ function updateCountdownTimer() {
       breakReminderCountdown.textContent = `(${minutes}:${seconds})`;
     })
     .catch(error => {
-      console.error('🌸 Error updating countdown:', error);
+      console.error('🌸🌸🌸 Error updating countdown:', error);
       breakReminderCountdown.textContent = '(40:00)';
     });
 }
@@ -399,67 +401,4 @@ function updateCurrentStatus() {
         }
       });
   });
-}
-
-/******************************************************************************
- * UTILITIES
- ******************************************************************************/
-
-/**
- * Helper function để gửi message an toàn tới background script
- * @param {Object} message - Message object to send to background script
- * @returns {Promise<any>} - Response from background script or null on error
- */
-async function sendMessageSafely(message) {
-  try {
-    // Check if extension context is valid before sending
-    if (!chrome.runtime || chrome.runtime.id === undefined) {
-      console.warn('🌸🌸🌸 Extension context is invalid, not sending message');
-      return null;
-    }
-
-    // Use a more reliable approach for timeouts with a wrapper Promise
-    const response = await new Promise((resolve) => {
-      const timeoutId = setTimeout(() => {
-        console.warn('🌸🌸🌸 Message sending timed out after 2 seconds');
-        resolve(null);  // Resolve with null instead of rejecting
-      }, 2000);
-
-      try {
-        chrome.runtime.sendMessage(message, (response) => {
-          clearTimeout(timeoutId);
-          
-          // Check for chrome runtime errors
-          const lastError = chrome.runtime.lastError;
-          if (lastError) {
-            console.warn('🌸🌸🌸 Chrome runtime error:', lastError.message || String(lastError));
-            resolve(null);
-            return;
-          }
-          
-          resolve(response);
-        });
-      } catch (innerError) {
-        clearTimeout(timeoutId);
-        console.warn('🌸🌸🌸 Error in chrome.runtime.sendMessage:', innerError);
-        resolve(null);
-      }
-    });
-    
-    return response;
-  } catch (error) {
-    // These catch blocks should only trigger for errors in the outer function
-    if (error.message?.includes('Extension context invalidated')) {
-      console.warn('🌸🌸🌸 Extension context invalidated in popup.js');
-      return null;
-    }
-    
-    if (error.message?.includes('Could not establish connection')) {
-      console.warn('🌸🌸🌸 Could not connect to background script, might be loading');
-      return null;
-    }
-    
-    console.warn('🌸🌸🌸 Failed to send message:', error);
-    return null;
-  }
 }

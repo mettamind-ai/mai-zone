@@ -1,6 +1,10 @@
 /**
  * MaiZone Browser Extension
  * Constants: Centralized configuration values
+ * @feature f01 - Distraction Blocking
+ * @feature f02 - AI Text Prediction
+ * @feature f03 - Break Reminder
+ * @feature f04 - Deep Work Mode
  */
 
 /******************************************************************************
@@ -9,7 +13,7 @@
 
 export const TEXT_PREDICTION_CONFIG = {
   // Delay before showing suggestion (ms)
-  DELAY_BEFORE_SUGGESTION: 300,
+  DELAY_BEFORE_SUGGESTION: 800,
   // Minimum characters to trigger prediction
   MIN_CHARS_TO_TRIGGER: 2,
   // Minimum time between API calls (ms)

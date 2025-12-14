@@ -1,6 +1,11 @@
 /**
  * MaiZone Browser Extension
  * Background Script: Central coordinator for all extension features
+ * @feature f01 - Distraction Blocking
+ * @feature f02 - AI Text Prediction
+ * @feature f03 - Break Reminder
+ * @feature f04 - Deep Work Mode
+ * @feature f05 - State Management
  */
 
 import { initState, setupStateListeners, getState } from './background_state.js';
@@ -8,6 +13,7 @@ import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, handleNotificationButtonClick, sendBreakReminder, startBreakReminder } from './background_breakReminder.js';
 import { initDeepWork } from './background_deepWork.js';
 import { initPrediction } from './background_prediction.js';
+import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
  * Initialize background script
@@ -97,28 +103,13 @@ async function setupDefaultSettings() {
       blockDistractions: true,
       textPredictionEnabled: true,
       breakReminderEnabled: true,
-      distractingSites: [
-        'youtube.com',
-        'facebook.com',
-        'twitter.com',
-        'instagram.com',
-        'reddit.com',
-        'tiktok.com',
-        'netflix.com',
-        'spotify.com',
-        'soundcloud.com',
-        'vnexpress.net'
-      ],
-      deepWorkBlockedSites: [
-        'discord.com',
-        'messenger.com',
-        'whatsapp.com'
-      ]
+      distractingSites: DEFAULT_DISTRACTING_SITES,
+      deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES
     });
     
     console.info('🌸 Default settings initialized on install');
   } catch (error) {
-    console.error('🌸 Error setting up default settings:', error);
+    console.error('🌸🌸🌸 Error setting up default settings:', error);
   }
 }
 

@@ -65,7 +65,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
   - [x] `f04a` Trong 1 block chỉ làm 1 việc (1 mục đích rõ ràng) => Trong popup, Mai có 1 ô để user nhập vào task định làm trong 40-min block tiếp theo sau khi nhập xong thì đồng hồ đếm ngược được reset về 40:00
   - [x] `f04b` Sau khi kết thúc đếm giờ thì dừng bộ đếm, và enable lại ô nhập task và button trong popup về trạng thái ban đầu (ô nhập task là trống và button label là "Enter task to Deep Work"). Như vậy Deep work & break flow mới sẽ là: User nhập task => Enter deep work mode in 40:00 => Đồng hồ Nhắc nhở nghỉ ngơi bắt đầu đếm ngược => tới 00:00 thì nhắc nghỉ ngơi và dừng đồng hồ (tắt toggle "Nhắc nhở nghỉ ngơi") + reset ô nhập task & button => Khi người dùng nhập task mới và bắt đầu, toggle "Nhắc nhở nghỉ ngơi" sẽ tự động được bật lại.
   - [x] `f04c` Trong deep work thì chặn cả những trang web nhắn tin như messenger.com, discord.com và whatsapp.com
-  - [x] `f04d` trong popup, "Nhắc nhở nghỉ ngơi" đổi thành "Deep Work Time Block", và ô "Nhập công việc cần tập trung ..." thì chỉ cần ấn Enter là xong không cần phần nút bấm ở dưới nữa. Khi đồng hồ đang đếm ngược thì tron popup đổi "Deep Work Time Block" thành "Deep Working ..."
+  - [x] `f04d` trong popup, label đổi thành "Khung Deep Work", và ô "Nhập công việc cần tập trung ..." thì chỉ cần ấn Enter là xong không cần phần nút bấm ở dưới nữa. Khi đồng hồ đang đếm ngược thì trong popup đổi "Khung Deep Work" thành "Đang Deep Work..."
 
 - [x] `f05` Quản lý và đồng bộ state/ Xây dựng layer quản lý state thống nhất cho tất cả các tính năng, tránh rải rác state ở nhiều nơi. Sử dụng thư viện như Zustand hoặc lightweight state management tự xây dựng để quản lý toàn bộ trạng thái tập trung (ví dụ: deep work mode, tasks, timer state).
 

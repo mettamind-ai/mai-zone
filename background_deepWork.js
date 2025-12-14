@@ -39,7 +39,7 @@ function setupMessageListeners() {
 /**
  * Start deep work mode
  */
-function startDeepWork(data, sendResponse) {
+async function startDeepWork(data, sendResponse) {
   try {
     const task = data?.task;
     if (!task) {
@@ -50,7 +50,7 @@ function startDeepWork(data, sendResponse) {
     }
     
     // Update state
-    updateState({
+    await updateState({
       isInFlow: true,
       currentTask: task,
       breakReminderEnabled: true
@@ -65,7 +65,7 @@ function startDeepWork(data, sendResponse) {
       sendResponse({ success: true });
     }
   } catch (error) {
-    console.error('🌸 Error starting Deep Work mode:', error);
+    console.error('🌸🌸🌸 Error starting Deep Work mode:', error);
     if (sendResponse) {
       sendResponse({ success: false, error: error.message });
     }
@@ -93,7 +93,7 @@ export function endDeepWork(sendResponse) {
       sendResponse({ success: true });
     }
   } catch (error) {
-    console.error('🌸 Error ending Deep Work mode:', error);
+    console.error('🌸🌸🌸 Error ending Deep Work mode:', error);
     if (sendResponse) {
       sendResponse({ success: false, error: error.message });
     }

@@ -6,6 +6,7 @@
  */
 
 import { getState, updateState } from './background_state.js';
+import { sendMessageToTabSafely } from './messaging.js';
 
 /**
  * Initialize distraction blocking if enabled
@@ -40,8 +41,13 @@ function setupMessageListeners() {
       return true;
     }
     else if (message.action === 'closeTab') {
-      chrome.tabs.remove(sender.tab.id);
-      sendResponse({ success: true });
+      const tabId = sender?.tab?.id;
+      if (typeof tabId === 'number') {
+        chrome.tabs.remove(tabId);
+        sendResponse({ success: true });
+      } else {
+        sendResponse({ success: false, error: 'No tab to close' });
+      }
       return true;
     }
     return false;
@@ -149,7 +155,7 @@ async function isDistractingWebsite(url) {
 
     return false;
   } catch (err) {
-    console.error('🌸 Error checking URL:', err);
+    console.error('🌸🌸🌸 Error checking URL:', err);
     return false;
   }
 }
@@ -217,24 +223,7 @@ function sendWarningToTab(tabId, url) {
       }
     });
   } catch (error) {
-    console.error('🌸 Error in sendWarningToTab:', error);
-  }
-}
-
-/**
- * Helper function for safe message sending to tabs
- */
-async function sendMessageToTabSafely(tabId, message) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, message);
-  } catch (error) {
-    const errorMessage = error?.message || String(error);
-    if (errorMessage.includes('Extension context invalidated')) {
-      // Expected during page unload or extension update - ignore silently
-      return null;
-    }
-    console.warn('🌸🌸🌸 Failed to send message to tab:', error);
-    return null;
+    console.error('🌸🌸🌸 Error in sendWarningToTab:', error);
   }
 }
 

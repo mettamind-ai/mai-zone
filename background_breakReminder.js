@@ -215,7 +215,7 @@ export function startBreakReminder(customInterval) {
         // End deep work mode
         endDeepWork();
       } catch (error) {
-        console.error('🌸 Error in timer trigger:', error);
+        console.error('🌸🌸🌸 Error in timer trigger:', error);
         // Restart timer even if reminder fails
         startBreakReminder();
       }
@@ -289,7 +289,7 @@ function showBreakReminderNotification() {
       buttons: [{ title: 'Okieee, chill! 👌' }, { title: 'Nhắc lại sau, đang gấp! ⏱️' }]
     }, (notificationId) => {
       if (chrome.runtime.lastError) {
-        console.error('🌸 Error creating notification:', chrome.runtime.lastError);
+        console.error('🌸🌸🌸 Error creating notification:', chrome.runtime.lastError);
         
         // Retry with alternative ID
         setTimeout(() => {
@@ -313,7 +313,7 @@ function showBreakReminderNotification() {
     
     console.info('🌸 Break reminder sent');
   } catch (error) {
-    console.error('🌸 Error in sendBreakReminder:', error);
+    console.error('🌸🌸🌸 Error in sendBreakReminder:', error);
   }
 }
 
@@ -359,7 +359,7 @@ export function resetBreakReminder(data, sendResponse) {
       sendResponse({ success: true });
     }
   } catch (error) {
-    console.error('🌸 Error in resetBreakReminder:', error);
+    console.error('🌸🌸🌸 Error in resetBreakReminder:', error);
     if (sendResponse) {
       sendResponse({ success: false, error: error.message });
     }
