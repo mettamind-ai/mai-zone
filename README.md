@@ -1,3 +1,7 @@
+## Hướng dẫn cài đặt browser ext
+<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />
+
+
 !!! **Lưu ý quan trọng dành cho AI Coding Agents:**  
 Trước khi thực hiện bất kỳ thao tác nào, bạn **phải đọc kỹ** [Coding Guidelines](./AGENTS.md) và [How It Works Documentation](./HIWORK.md) !!!
 
