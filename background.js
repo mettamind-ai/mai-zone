@@ -8,7 +8,7 @@
  * @feature f06 - ClipMD (Clipboard to Markdown)
  */
 
-import { ensureInitialized, setupStateListeners } from './background_state.js';
+import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
 import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
 import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
@@ -125,7 +125,7 @@ async function onInstalledListener(details) {
 
   if (details.reason === 'install') {
     // Set default settings on first install
-    setupDefaultSettings();
+    await setupDefaultSettings();
   }
 }
 
@@ -134,8 +134,6 @@ async function onInstalledListener(details) {
  */
 async function setupDefaultSettings() {
   try {
-    const { updateState } = await import('./background_state.js');
-    
     await updateState({
       blockDistractions: true,
       breakReminderEnabled: false,

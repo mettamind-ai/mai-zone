@@ -13,6 +13,8 @@ import { messageActions } from './actions.js';
 
 const BREAK_REMINDER_END_ALARM = 'maizone_breakReminderEnd';
 const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
+const BADGE_TICK_INTERVAL_SEC = 1;
+const BADGE_TICK_INTERVAL_MINUTES = BADGE_TICK_INTERVAL_SEC / 60;
 
 let unsubscribeStateDelta = null;
 
@@ -213,9 +215,13 @@ async function scheduleBreakReminderAlarms(expectedEndTime) {
     chrome.alarms.create(BREAK_REMINDER_END_ALARM, { when: expectedEndTime });
 
     const hasOffscreen = await ensureOffscreenDocument();
-    // Always keep a low-frequency badge alarm as a fallback:
-    // some Chromium forks may throttle/limit offscreen, but alarms should still wake the SW.
-    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
+    // Badge tick:
+    // - Prefer offscreen (ticks every second without waking SW).
+    // - If offscreen is unavailable, fall back to alarms (best-effort; some browsers may clamp).
+    const badgeTick = hasOffscreen
+      ? { delayInMinutes: 1, periodInMinutes: 1 }
+      : { delayInMinutes: BADGE_TICK_INTERVAL_MINUTES, periodInMinutes: BADGE_TICK_INTERVAL_MINUTES };
+    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, badgeTick);
 
     if (hasOffscreen) {
       // Offscreen can tick badge every second without waking the SW constantly.
@@ -331,9 +337,11 @@ function updateBadgeWithTimerDisplay() {
     return;
   }
 
-  // MV3 badge tick runs by minute; show mm:ss (seconds always "00") for clarity.
-  const remainingMinutes = Math.ceil(remainingMs / 60000);
-  chrome.action.setBadgeText({ text: `${String(remainingMinutes).padStart(2, '0')}:00` });
+  const safeMs = Math.max(0, remainingMs);
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  chrome.action.setBadgeText({ text: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}` });
 }
 
 /**

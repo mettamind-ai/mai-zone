@@ -112,4 +112,4 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 
 - Khi đang Deep Work, badge trên icon MaiZone hiển thị thời gian còn lại dạng `mm:ss` và cập nhật khoảng mỗi 1 giây.
 - Cơ chế: tick badge trong `chrome.offscreen` để tránh wake MV3 service worker liên tục (tiết kiệm pin/CPU).
-- Nếu trình duyệt không hỗ trợ `chrome.offscreen`, do MV3 service worker có thể “ngủ”, badge sẽ fallback cập nhật theo phút (bằng `chrome.alarms`).
+- Nếu trình duyệt không hỗ trợ `chrome.offscreen`, badge sẽ fallback tick bằng `chrome.alarms` (best-effort; có thể bị trình duyệt throttle/clamp nên không luôn mượt 1s).
