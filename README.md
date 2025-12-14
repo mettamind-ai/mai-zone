@@ -16,19 +16,19 @@ Các tính năng lớn sẽ chia nhỏ thành nhiều task con, đánh thêm ký
 Việc đặt tag tính năng trực tiếp vào **source code comments** giúp tìm kiếm, theo dõi và hiểu code dễ dàng hơn.
 
 ## Hai công cụ quan trọng để quản lý tính năng là `FIT` và `FAT`
-- **`FTI` (Feature Tag Indexing Table)**: Bảng tổng hợp nhanh các tính năng và phần code liên quan.
+- **`FIT` (Feature Tag Indexing Table)**: Bảng tổng hợp nhanh các tính năng và phần code liên quan.
 - **`FAT` (Features And sub-Tasks Checklist)**: mô tả cụ thể và theo dõi chi tiết tiến độ các tính năng.
 
-## Sử dụng `FTI` và `FAT` để đạt hiệu quả cao nhất
+## Sử dụng `FIT` và `FAT` để đạt hiệu quả cao nhất
 Việc tổ chức tài liệu và source code theo cách đánh tag và liên kết trực tiếp giúp tận dụng tối đa khả năng hỗ trợ của LLM. Việc này đảm bảo tính lâu dài, dễ hiểu, dễ phát triển và dễ bảo trì về sau. Ví dụ: thay vì viết dài dòng, giờ chỉ gõ _Triển khai tính năng `f02`_, _Rà soát code `f04` để phát hiện lỗi tiềm ẩn_. 
 
-**Hãy dùng và update bảng FTI và Checklist FAT thường xuyên**
+**Hãy dùng và update bảng FIT và Checklist FAT thường xuyên**
 
 
 ---
 
 
-## `FTI` (Feature Tag Indexing Table)
+## `FIT` (Feature Tag Indexing Table)
 
 |<!--r0 c1-->Tag|<!--r0 c2-->Tên                      |<!--r0 c3-->Tính năng                                       |<!--r0 c4-->Files liên quan|<!--r0 c5-->Hàm chính|<!--r0 c6-->Shortcut / UI|<!--r0 c7-->Trạng_thái|
 |--------------|--------------------------------------|------------------------------------------------------------|--------------------|--------------|------------|------------------------------------------|
