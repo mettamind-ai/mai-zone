@@ -6,7 +6,33 @@
  * @feature f04c - Deep Work Mode Integration
  */
 
-import { sendMessageSafely } from './messaging.js';
+/******************************************************************************
+ * MESSAGING (COMPAT LAYER)
+ ******************************************************************************/
+
+// Some browsers/versions may treat content scripts as classic scripts (no static `import`).
+// Use dynamic import so content.js runs reliably in both module and non-module contexts.
+const messagingModulePromise = (async () => {
+  try {
+    if (!globalThis?.chrome?.runtime?.getURL) return null;
+    return await import(chrome.runtime.getURL('messaging.js'));
+  } catch (error) {
+    console.error('🌸🌸🌸 Error loading messaging module:', error);
+    return null;
+  }
+})();
+
+/**
+ * Send a message to background safely (compat wrapper around messaging.js).
+ * @param {Object} message - Message payload
+ * @param {Object} [options]
+ * @returns {Promise<any|null>}
+ */
+async function sendMessageSafely(message, options) {
+  const messaging = await messagingModulePromise;
+  if (!messaging?.sendMessageSafely) return null;
+  return messaging.sendMessageSafely(message, options);
+}
 
 /******************************************************************************
  * VARIABLES AND CONFIGURATION
