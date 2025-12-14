@@ -6,6 +6,7 @@
  */
 
 import { sendMessageSafely } from './messaging.js';
+import { getStateSafely, updateStateSafely } from './state_helpers.js';
 
 /******************************************************************************
  * ELEMENT REFERENCES AND VARIABLES
@@ -92,37 +93,19 @@ function setBreakReminderLabelText(text) {
  * Load state from background script
  */
 function loadState() {
-  sendMessageSafely({ action: 'getState' })
-    .then(state => {
-      if (state) {
-        updateUI(state);
-      } else {
-        // Fallback to local storage if message fails
-        chrome.storage.local.get(null, (data) => {
-          if (data && Object.keys(data).length > 0) {
-            updateUI(data);
-          } else {
-            // Use hardcoded defaults as last resort
-            const defaults = {
-              isEnabled: true,
-              blockDistractions: true,
-              breakReminderEnabled: true,
-              isInFlow: false,
-              currentTask: ''
-            };
-            updateUI(defaults);
-          }
-        });
-      }
-    })
-    .catch(error => {
+  const defaults = {
+    isEnabled: true,
+    blockDistractions: true,
+    breakReminderEnabled: false,
+    isInFlow: false,
+    currentTask: ''
+  };
+
+  getStateSafely()
+    .then((state) => updateUI({ ...defaults, ...(state || {}) }))
+    .catch((error) => {
       console.error('🌸🌸🌸 Error loading state:', error);
-      // Fallback to storage
-      chrome.storage.local.get(null, (data) => {
-        if (data && Object.keys(data).length > 0) {
-          updateUI(data);
-        }
-      });
+      updateUI(defaults);
     });
 }
 
@@ -139,10 +122,8 @@ function updateUI(state) {
   taskInput.value = state.currentTask || '';
   taskInput.disabled = state.isInFlow;
   
-  // Update task label if in deep work
-  if (state.isInFlow) {
-    setBreakReminderLabelText('Đang Deep Work...');
-  }
+  // Update task label
+  setBreakReminderLabelText(state.isInFlow ? 'Đang Deep Work...' : 'Khung Deep Work');
   
   // Update enabled state UI
   updateEnabledState(state.isEnabled);
@@ -193,10 +174,9 @@ function updateEnabledState(isEnabled) {
     breakReminderToggle.disabled = false;
     
     // Set task input state based on current flow state
-    sendMessageSafely({ action: 'getState', key: 'isInFlow' })
-      .then(state => {
-        taskInput.disabled = !!state?.isInFlow;
-      });
+    getStateSafely('isInFlow').then((state) => {
+      taskInput.disabled = !!state?.isInFlow;
+    });
   }
 }
 
@@ -218,38 +198,49 @@ function handleToggle(settingKey) {
     'breakReminderEnabled': breakReminderToggle
   };
   
-  const value = toggleMap[settingKey].checked;
+  const toggle = toggleMap[settingKey];
+  if (!toggle) return;
+
+  const value = toggle.checked;
   
   // Special handling for break reminder toggle
-  if (settingKey === 'breakReminderEnabled' && !value) {
-    // When disabling break reminder, also exit deep work
-    sendMessageSafely({
-      action: 'updateState',
-      payload: {
+  if (settingKey === 'breakReminderEnabled') {
+    if (!value) {
+      // When disabling break reminder, also exit deep work
+      updateStateSafely({
         breakReminderEnabled: false,
         isInFlow: false,
         currentTask: ''
-      }
-    });
-    
-    // Reset UI
-    taskInput.value = '';
-    taskInput.disabled = false;
-    
-    // Reset label
-    setBreakReminderLabelText('Khung Deep Work');
-    
-    // Clear badge
-    chrome.action.setBadgeText({ text: '' });
-    
+      });
+
+      // Reset UI
+      taskInput.value = '';
+      taskInput.disabled = false;
+
+      // Reset label
+      setBreakReminderLabelText('Khung Deep Work');
+
+      // Clear badge
+      chrome.action.setBadgeText({ text: '' });
+
+      return;
+    }
+
+    // Enabling Deep Work requires a task
+    const task = taskInput?.value?.trim?.() || '';
+    if (!task) {
+      alert('Hãy nhập công việc cần tập trung trước khi bật Deep Work.');
+      breakReminderToggle.checked = false;
+      setBreakReminderLabelText('Khung Deep Work');
+      return;
+    }
+
+    setCurrentTask();
     return;
   }
-  
-  // Update state in background
-  sendMessageSafely({
-    action: 'updateState',
-    payload: { [settingKey]: value }
-  });
+
+  // Update state in background (with fallback)
+  updateStateSafely({ [settingKey]: value });
 }
 
 /******************************************************************************
@@ -275,36 +266,33 @@ function setCurrentTask() {
   const task = taskInput.value.trim();
   if (!task) {
     alert('Vui lòng nhập công việc cần tập trung');
+    breakReminderToggle.checked = false;
     return;
   }
   
-  // Update state
+  // Optimistic UI update for responsiveness
+  taskInput.disabled = true;
+  breakReminderToggle.checked = true;
+  setBreakReminderLabelText('Đang Deep Work...');
+
+  // Reset break reminder timer (authoritative start)
   sendMessageSafely({
-    action: 'updateState',
-    payload: {
-      currentTask: task,
-      isInFlow: true,
-      breakReminderEnabled: true
+    action: 'resetBreakReminder',
+    data: { task }
+  }).then((response) => {
+    if (!response?.success) {
+      console.warn('🌸🌸🌸 resetBreakReminder failed, falling back to updateState');
+      updateStateSafely({
+        currentTask: task,
+        isInFlow: true,
+        breakReminderEnabled: true
+      });
     }
-  })
-  .then(() => {
-    // Reset break reminder timer
-    sendMessageSafely({
-      action: 'resetBreakReminder',
-      data: { task }
-    });
-    
-    // Update UI
-    taskInput.disabled = true;
-    breakReminderToggle.checked = true;
-    
-    // Update label
-    setBreakReminderLabelText('Đang Deep Work...');
-    
-    // Update status message temporarily
-    statusText.textContent = `Mai sẽ giúp bạn tập trung vào: ${task}`;
-    setTimeout(updateCurrentStatus, 3000);
   });
+  
+  // Update status message temporarily
+  statusText.textContent = `Mai sẽ giúp bạn tập trung vào: ${task}`;
+  setTimeout(updateCurrentStatus, 3000);
 }
 
 /******************************************************************************
@@ -371,37 +359,36 @@ function updateCurrentStatus() {
     if (!tabs?.length) return;
     
     // Get enabled state
-    sendMessageSafely({ action: 'getState', key: 'isEnabled' })
-      .then(state => {
-        if (!state || !state.isEnabled) {
-          statusText.textContent = 'Mai đang ngủ. Nhấn kích hoạt để đánh thức.';
-          return;
-        }
-        
-        const currentTab = tabs[0];
-        
-        if (currentTab.url) {
-          try {
-            const url = new URL(currentTab.url);
-            const hostname = url.hostname.replace(/^www\./, '');
-            
-            // Site-specific messages
-            const messages = {
-              'youtube.com': 'Mai đang quan sát YouTube... Nhớ đừng xem quá lâu nhé!',
-              'facebook.com': 'Mai đang theo dõi Facebook... Đừng scroll quá nhiều nhé!',
-              'gmail.com': 'Mai đang hỗ trợ bạn đọc email... Trả lời ngắn gọn thôi nhé!',
-              'netflix.com': 'Mai nhắc bạn đừng xem phim quá khuya nhé!',
-              'github.com': 'Mai đang theo dõi bạn code trên GitHub... hấn hảo!',
-              'google.com': 'Mai đang quan sát bạn tìm kiếm... Tìm được gì hay chưa?'
-            };
-            
-            statusText.textContent = messages[hostname] || `Mai đang quan sát ${hostname}...`;
-          } catch (err) {
-            statusText.textContent = 'Mai đang quan sát âm thầm...';
-          }
-        } else {
+    getStateSafely('isEnabled').then((state) => {
+      if (!state || !state.isEnabled) {
+        statusText.textContent = 'Mai đang ngủ. Nhấn kích hoạt để đánh thức.';
+        return;
+      }
+      
+      const currentTab = tabs[0];
+      
+      if (currentTab.url) {
+        try {
+          const url = new URL(currentTab.url);
+          const hostname = url.hostname.replace(/^www\./, '');
+          
+          // Site-specific messages
+          const messages = {
+            'youtube.com': 'Mai đang quan sát YouTube... Nhớ đừng xem quá lâu nhé!',
+            'facebook.com': 'Mai đang theo dõi Facebook... Đừng scroll quá nhiều nhé!',
+            'gmail.com': 'Mai đang hỗ trợ bạn đọc email... Trả lời ngắn gọn thôi nhé!',
+            'netflix.com': 'Mai nhắc bạn đừng xem phim quá khuya nhé!',
+            'github.com': 'Mai đang theo dõi bạn code trên GitHub... hấn hảo!',
+            'google.com': 'Mai đang quan sát bạn tìm kiếm... Tìm được gì hay chưa?'
+          };
+          
+          statusText.textContent = messages[hostname] || `Mai đang quan sát ${hostname}...`;
+        } catch (err) {
           statusText.textContent = 'Mai đang quan sát âm thầm...';
         }
-      });
+      } else {
+        statusText.textContent = 'Mai đang quan sát âm thầm...';
+      }
+    });
   });
 }

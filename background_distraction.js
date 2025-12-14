@@ -5,21 +5,15 @@
  * @feature f04 - Deep Work Mode (integration part)
  */
 
-import { getState, updateState } from './background_state.js';
+import { getState } from './background_state.js';
 import { sendMessageToTabSafely } from './messaging.js';
 
 /**
  * Initialize distraction blocking if enabled
  */
 export function initDistraction() {
-  const { isEnabled, blockDistractions } = getState();
-  
-  if (isEnabled && blockDistractions) {
-    enableDistractionsBlocking();
-  }
-  
-  // Setup event listeners
   setupMessageListeners();
+  syncDistractionBlocking();
 }
 
 /**
@@ -27,12 +21,7 @@ export function initDistraction() {
  */
 function setupMessageListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'toggleBlockDistractions') {
-      toggleDistractionsBlocking(message.data?.enabled);
-      sendResponse({ success: true });
-      return true;
-    }
-    else if (message.action === 'checkCurrentUrl') {
+    if (message.action === 'checkCurrentUrl') {
       onCheckCurrentUrl(message.data, sender.tab, sendResponse);
       return true;
     }
@@ -50,15 +39,44 @@ function setupMessageListeners() {
       }
       return true;
     }
+    else if (message.action === 'stateUpdated') {
+      handleStateUpdated(message.state);
+      return false;
+    }
     return false;
   });
 }
 
 /**
- * Enable distraction blocking
+ * Ensure webNavigation listeners match current state.
  */
-async function enableDistractionsBlocking() {
-  await updateState({ blockDistractions: true });
+function syncDistractionBlocking() {
+  const { isEnabled, blockDistractions } = getState();
+  const shouldEnable = !!(isEnabled && blockDistractions);
+
+  if (shouldEnable) {
+    enableDistractionsBlocking();
+  } else {
+    disableDistractionsBlocking();
+  }
+}
+
+/**
+ * Handle state updates broadcasted by background_state.
+ * @param {Object} updates - Partial state
+ * @returns {void}
+ */
+function handleStateUpdated(updates) {
+  if (!updates || typeof updates !== 'object') return;
+  if ('isEnabled' in updates || 'blockDistractions' in updates) {
+    syncDistractionBlocking();
+  }
+}
+
+/**
+ * Enable distraction blocking (listeners only)
+ */
+function enableDistractionsBlocking() {
   console.info('🌸 Distraction blocking enabled');
 
   // Register listeners for navigation events
@@ -83,10 +101,9 @@ async function enableDistractionsBlocking() {
 }
 
 /**
- * Disable distraction blocking
+ * Disable distraction blocking (listeners only)
  */
-async function disableDistractionsBlocking() {
-  await updateState({ blockDistractions: false });
+function disableDistractionsBlocking() {
   console.info('🌸 Distraction blocking disabled');
 
   // Remove navigation listeners
@@ -95,18 +112,6 @@ async function disableDistractionsBlocking() {
   }
   if (chrome.webNavigation.onHistoryStateUpdated.hasListener(handleWebNavigation)) {
     chrome.webNavigation.onHistoryStateUpdated.removeListener(handleWebNavigation);
-  }
-}
-
-/**
- * Toggle distraction blocking
- */
-function toggleDistractionsBlocking(enabled) {
-  if (typeof enabled === 'undefined') {
-    const { blockDistractions } = getState();
-    blockDistractions ? disableDistractionsBlocking() : enableDistractionsBlocking();
-  } else {
-    enabled ? enableDistractionsBlocking() : disableDistractionsBlocking();
   }
 }
 
@@ -176,13 +181,7 @@ async function handleWebNavigation(details) {
   const isDistracting = await isDistractingWebsite(details.url);
   if (isDistracting) {
     console.log(`🌸 Navigation to distracting site detected: ${details.url}`);
-    chrome.tabs.get(details.tabId, (tab) => {
-      if (chrome.runtime.lastError) {
-        console.warn('🌸🌸🌸 Tab no longer exists:', chrome.runtime.lastError);
-        return;
-      }
-      sendWarningToTab(details.tabId, details.url);
-    });
+    sendWarningToTab(details.tabId, details.url);
   }
 }
 
@@ -236,12 +235,7 @@ async function onCheckCurrentUrl(data, tab, sendResponse) {
     return;
   }
   
-  console.log('🌸 Checking URL for distractions:', data.url, 'Is in flow:', data.isInFlow);
-  
-  // Update flow state if provided
-  if (data.isInFlow !== undefined) {
-    await updateState({ isInFlow: data.isInFlow });
-  }
+  console.log('🌸 Checking URL for distractions:', data.url);
   
   // Check if URL is distracting
   const isDistracting = await isDistractingWebsite(data.url);

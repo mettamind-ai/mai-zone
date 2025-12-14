@@ -8,13 +8,12 @@ import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './con
 
 /***** DEFAULT STATE *****/
 
-export const DEFAULT_STATE = {
+const DEFAULT_STATE = {
   isEnabled: true,
-  interactionLevel: 'balanced',
   currentTask: '',
   isInFlow: false,
   blockDistractions: true,
-  breakReminderEnabled: true,
+  breakReminderEnabled: false,
   distractingSites: DEFAULT_DISTRACTING_SITES,
   deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES,
   reminderStartTime: null,
@@ -27,19 +26,32 @@ let state = { ...DEFAULT_STATE };
 
 /***** STATE NORMALIZATION *****/
 
+/**
+ * Chuẩn hoá boolean (chỉ nhận đúng kiểu boolean).
+ * @param {any} value - Giá trị cần normalize
+ * @param {boolean} fallback - Giá trị mặc định nếu không hợp lệ
+ * @returns {boolean}
+ */
 function normalizeBoolean(value, fallback) {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+/**
+ * Chuẩn hoá string (chỉ nhận đúng kiểu string).
+ * @param {any} value - Giá trị cần normalize
+ * @param {string} fallback - Giá trị mặc định nếu không hợp lệ
+ * @returns {string}
+ */
 function normalizeString(value, fallback) {
   return typeof value === 'string' ? value : fallback;
 }
 
-function normalizeInteractionLevel(value, fallback) {
-  if (value === 'balanced' || value === 'minimal' || value === 'max') return value;
-  return fallback;
-}
-
+/**
+ * Chuẩn hoá mảng string (trim + lọc empty).
+ * @param {any} value - Giá trị cần normalize
+ * @param {Array<string>} fallback - Giá trị mặc định nếu không hợp lệ
+ * @returns {Array<string>}
+ */
 function normalizeArrayOfStrings(value, fallback) {
   if (!Array.isArray(value)) return fallback;
   return value
@@ -48,16 +60,36 @@ function normalizeArrayOfStrings(value, fallback) {
     .filter(Boolean);
 }
 
+/**
+ * Chuẩn hoá number hoặc null.
+ * @param {any} value - Giá trị cần normalize
+ * @param {number|null} fallback - Giá trị mặc định nếu không hợp lệ
+ * @returns {number|null}
+ */
 function normalizeNumberOrNull(value, fallback) {
   if (value === null) return null;
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+/**
+ * Enforce các invariants để tránh state mâu thuẫn.
+ * @param {Object} nextState - State sau merge/sanitize
+ * @returns {Object} State đã được chỉnh theo invariants
+ */
 function enforceStateInvariants(nextState) {
   const sanitized = { ...nextState };
 
   if (!sanitized.currentTask) {
     sanitized.currentTask = '';
+  }
+
+  if (!sanitized.isEnabled) {
+    sanitized.isInFlow = false;
+    sanitized.currentTask = '';
+    sanitized.breakReminderEnabled = false;
+    sanitized.reminderStartTime = null;
+    sanitized.reminderInterval = null;
+    sanitized.reminderExpectedEndTime = null;
   }
 
   if (sanitized.isInFlow && !sanitized.currentTask) {
@@ -66,6 +98,7 @@ function enforceStateInvariants(nextState) {
 
   if (!sanitized.isInFlow || !sanitized.currentTask) {
     sanitized.isInFlow = false;
+    sanitized.breakReminderEnabled = false;
     sanitized.reminderStartTime = null;
     sanitized.reminderInterval = null;
     sanitized.reminderExpectedEndTime = null;
@@ -74,13 +107,17 @@ function enforceStateInvariants(nextState) {
   return sanitized;
 }
 
+/**
+ * Sanitize state load từ storage (loại bỏ kiểu sai và set defaults).
+ * @param {Object} storedState - Raw state từ chrome.storage.local
+ * @returns {Object} State đã sanitize
+ */
 function sanitizeStoredState(storedState) {
   const base = { ...DEFAULT_STATE };
   const stored = storedState || {};
 
   const merged = {
     isEnabled: normalizeBoolean(stored.isEnabled, base.isEnabled),
-    interactionLevel: normalizeInteractionLevel(stored.interactionLevel, base.interactionLevel),
     currentTask: normalizeString(stored.currentTask, base.currentTask),
     isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
     blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
@@ -95,15 +132,17 @@ function sanitizeStoredState(storedState) {
   return enforceStateInvariants({ ...base, ...merged });
 }
 
+/**
+ * Sanitize patch update (partial state) trước khi lưu.
+ * @param {Object} updates - Partial updates
+ * @returns {Object} Next state sau sanitize + invariants
+ */
 function sanitizeStateUpdates(updates) {
   if (!updates || typeof updates !== 'object') return {};
 
   const sanitized = {};
 
   if ('isEnabled' in updates) sanitized.isEnabled = normalizeBoolean(updates.isEnabled, state.isEnabled);
-  if ('interactionLevel' in updates) {
-    sanitized.interactionLevel = normalizeInteractionLevel(updates.interactionLevel, state.interactionLevel);
-  }
   if ('currentTask' in updates) sanitized.currentTask = normalizeString(updates.currentTask, state.currentTask);
   if ('isInFlow' in updates) sanitized.isInFlow = normalizeBoolean(updates.isInFlow, state.isInFlow);
   if ('blockDistractions' in updates) {

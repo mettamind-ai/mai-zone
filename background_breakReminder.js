@@ -7,7 +7,6 @@
 
 import { getState, updateState } from './background_state.js';
 import { BREAK_REMINDER_INTERVAL, BREAK_REMINDER_MESSAGES } from './constants.js';
-import { endDeepWork } from './background_deepWork.js';
 
 // Timer ID for break reminder
 let breakReminderTimerId = null;
@@ -25,26 +24,40 @@ export function initBreakReminder() {
  */
 function setupMessageListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'toggleBreakReminder') {
-      toggleBreakReminder(message.data?.enabled);
-      sendResponse({ success: true });
-      return true;
-    }
-    else if (message.action === 'resetBreakReminder') {
+    if (message.action === 'resetBreakReminder') {
       resetBreakReminder(message.data, sendResponse);
-      return true;
-    }
-    else if (message.action === 'testBreakReminder') {
-      sendBreakReminder();
-      sendResponse({ success: true });
       return true;
     }
     else if (message.action === 'getBreakReminderState') {
       getBreakReminderState(sendResponse);
       return true;
     }
+    else if (message.action === 'stateUpdated') {
+      handleStateUpdated(message.state);
+      return false;
+    }
     return false;
   });
+}
+
+/**
+ * Handle state updates broadcasted by background_state.
+ * @param {Object} updates - Partial state
+ * @returns {void}
+ */
+function handleStateUpdated(updates) {
+  if (!updates || typeof updates !== 'object') return;
+
+  const shouldStop =
+    ('isEnabled' in updates && !updates.isEnabled) ||
+    ('breakReminderEnabled' in updates && !updates.breakReminderEnabled) ||
+    ('isInFlow' in updates && !updates.isInFlow) ||
+    ('currentTask' in updates && !updates.currentTask);
+
+  if (!shouldStop) return;
+
+  stopBreakReminder();
+  chrome.action.setBadgeText({ text: '' });
 }
 
 /**
@@ -71,41 +84,6 @@ function initializeBreakReminderIfEnabled() {
     
     // Start a new timer
     startBreakReminder();
-  }
-}
-
-/**
- * Toggle break reminder
- */
-function toggleBreakReminder(enabled) {
-  if (typeof enabled === 'boolean') {
-    updateState({ breakReminderEnabled: enabled });
-    
-    if (enabled) {
-      console.info('🌸 Break reminder enabled');
-      startBreakReminder();
-    } else {
-      console.info('🌸 Break reminder disabled');
-      stopBreakReminder();
-      
-      // If disabling break reminder, also exit flow state
-      const { isInFlow } = getState();
-      if (isInFlow) {
-        updateState({ isInFlow: false, currentTask: '' });
-      }
-    }
-    
-    // Update badge - show remaining time if timer is running
-    if (enabled) {
-      updateBadgeWithTimerDisplay();
-    } else {
-      chrome.action.setBadgeText({ text: '' });
-    }
-    chrome.action.setBadgeBackgroundColor({ color: '#FF8FAB' });
-  } else {
-    // Toggle current state
-    const { breakReminderEnabled } = getState();
-    toggleBreakReminder(!breakReminderEnabled);
   }
 }
 
@@ -163,6 +141,8 @@ export function startBreakReminder(customInterval) {
   const checkTimerInterval = Math.min(3000, interval / 20); // Check every 3 seconds
   
   const checkBreakReminder = function() {
+    breakReminderTimerId = null;
+
     const now = Date.now();
     console.log('🌸 Checking break reminder at:', new Date(now).toLocaleTimeString());
     
@@ -171,8 +151,7 @@ export function startBreakReminder(customInterval) {
       reminderInterval, 
       reminderExpectedEndTime, 
       isInFlow, 
-      currentTask, 
-      breakReminderEnabled 
+      currentTask
     } = getState();
     
     if (!reminderStartTime) return;
@@ -180,12 +159,7 @@ export function startBreakReminder(customInterval) {
     // Check if still in flow state
     if (!isInFlow || !currentTask) {
       console.log('🌸 Not in flow state anymore, updating break reminder state');
-      updateState({ 
-        breakReminderEnabled: false,
-        reminderStartTime: null,
-        reminderInterval: null,
-        reminderExpectedEndTime: null
-      });
+      updateState({ isInFlow: false, currentTask: '' });
       // Clear badge
       chrome.action.setBadgeText({ text: '' });
       return;
@@ -212,8 +186,8 @@ export function startBreakReminder(customInterval) {
           breakReminderEnabled: false
         });
         
-        // End deep work mode
-        endDeepWork();
+        // Clear badge
+        chrome.action.setBadgeText({ text: '' });
       } catch (error) {
         console.error('🌸🌸🌸 Error in timer trigger:', error);
         // Restart timer even if reminder fails
@@ -239,14 +213,6 @@ function stopBreakReminder() {
   if (breakReminderTimerId) {
     clearTimeout(breakReminderTimerId);
     breakReminderTimerId = null;
-    
-    // Clear stored timer data
-    updateState({
-      reminderStartTime: null,
-      reminderInterval: null,
-      reminderExpectedEndTime: null
-    });
-    
     console.debug('🌸 Break reminder timer stopped');
   }
 }
@@ -333,26 +299,24 @@ export function handleNotificationButtonClick(notificationId, buttonIndex) {
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  */
-export function resetBreakReminder(data, sendResponse) {
+function resetBreakReminder(data, sendResponse) {
   try {
-    console.log('🌸 Resetting break reminder timer with task:', data?.task);
-    
-    // Ensure task is saved
-    if (data?.task) {
-      updateState({ 
-        currentTask: data.task,
-        isInFlow: true
-      });
+    const task = typeof data?.task === 'string' ? data.task.trim() : '';
+    if (!task) {
+      sendResponse?.({ success: false, error: 'Missing task' });
+      return;
     }
-    
-    // Make sure break reminder is enabled
-    updateState({ breakReminderEnabled: true });
+
+    console.log('🌸 Resetting break reminder timer with task:', task);
+
+    updateState({
+      currentTask: task,
+      isInFlow: true,
+      breakReminderEnabled: true
+    });
     
     // Reset the timer to 40 minutes
     startBreakReminder();
-    
-    // Update badge with timer
-    updateBadgeWithTimerDisplay();
     
     // Send success response
     if (sendResponse) {

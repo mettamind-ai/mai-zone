@@ -148,33 +148,6 @@
       border-radius: 4px;
       font-size: 14px;
     }
-    /* Button để đặt task và bắt đầu tập trung */
-    #set-task-button {
-      background-color: #FF8FAB; /* Màu hồng nhạt Mai theme */
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.3s;
-    }
-    /* Hiệu ứng hover cho button */
-    #set-task-button:hover {
-      background-color: #FFB7C5;
-    }
-    /* Class biểu thị trạng thái đang trong flow/deep work */
-    .flow-button {
-      background-color: #8a2be2 !important; /* Màu tím đậm */
-      font-size: 13px;
-      font-weight: bold;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Bóng đổ tạo hiệu ứng nổi */
-    }
-    /* Hiệu ứng hover cho flow button */
-    .flow-button:hover {
-      background-color: #9932cc !important;
-    }
   </style>
 </head>
 <body>
@@ -212,7 +185,7 @@
     <div class="switch-container">
       <span class="switch-label">Khung Deep Work <span id="break-reminder-countdown">(40:00)</span></span>
       <label class="switch">
-        <input type="checkbox" id="break-reminder-toggle" checked>
+        <input type="checkbox" id="break-reminder-toggle">
         <span class="slider"></span>
       </label>
     </div>

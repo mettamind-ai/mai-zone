@@ -6,7 +6,7 @@
  * @feature f05 - State Management
  */
 
-import { sendMessageSafely } from './messaging.js';
+import { getStateSafely, updateStateSafely } from './state_helpers.js';
 
 /***** INITIALIZATION *****/
 
@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', initOptions);
 async function initOptions() {
   console.info('🌸 Options page loaded');
 
-  loadInteractionLevel();
   loadSiteLists();
 
   const addSiteBtn = document.getElementById('add-site-btn');
@@ -36,49 +35,6 @@ async function initOptions() {
   });
 }
 
-/***** STATE HELPERS *****/
-
-/**
- * Lấy state an toàn (có fallback qua chrome.storage.local).
- * @param {string|Array<string>|null} keyOrKeys - Key hoặc list keys, null để lấy toàn bộ
- * @returns {Promise<Object>}
- */
-async function getStateSafely(keyOrKeys = null) {
-  const request = { action: 'getState' };
-  if (Array.isArray(keyOrKeys)) request.keys = keyOrKeys;
-  else if (typeof keyOrKeys === 'string') request.key = keyOrKeys;
-
-  const state = await sendMessageSafely(request);
-  if (state) return state;
-
-  return await new Promise((resolve) => {
-    if (Array.isArray(keyOrKeys)) {
-      chrome.storage.local.get(keyOrKeys, (data) => resolve(data || {}));
-      return;
-    }
-    if (typeof keyOrKeys === 'string') {
-      chrome.storage.local.get([keyOrKeys], (data) => resolve(data || {}));
-      return;
-    }
-    chrome.storage.local.get(null, (data) => resolve(data || {}));
-  });
-}
-
-/**
- * Cập nhật state an toàn (có fallback qua chrome.storage.local).
- * @param {Object} payload - Partial state update
- * @returns {Promise<boolean>}
- */
-async function updateStateSafely(payload) {
-  if (!payload || typeof payload !== 'object') return false;
-
-  const response = await sendMessageSafely({ action: 'updateState', payload });
-  if (response?.success) return true;
-
-  await new Promise((resolve) => chrome.storage.local.set(payload, () => resolve()));
-  return true;
-}
-
 /***** RENDERING *****/
 
 /**
@@ -88,11 +44,6 @@ async function updateStateSafely(payload) {
  */
 function handleStateUpdate(updates) {
   if (!updates || typeof updates !== 'object') return;
-
-  if ('interactionLevel' in updates) {
-    const select = document.getElementById('interaction-level-select');
-    if (select) select.value = updates.interactionLevel;
-  }
 
   if ('distractingSites' in updates) {
     renderSiteList('distractingSites', updates.distractingSites);
@@ -197,36 +148,6 @@ function handleAddSite(listType) {
     });
 }
 
-/***** INTERACTION LEVEL *****/
-
-/**
- * Load and save interaction level.
- * @returns {void}
- */
-function loadInteractionLevel() {
-  const selectEl = document.getElementById('interaction-level-select');
-  if (!selectEl) return;
-
-  getStateSafely('interactionLevel')
-    .then((response) => {
-      selectEl.value = response.interactionLevel || 'balanced';
-    })
-    .catch((error) => {
-      console.error('🌸🌸🌸 Error loading interaction level:', error);
-    });
-
-  selectEl.addEventListener('change', () => {
-    const newLevel = selectEl.value;
-    updateStateSafely({ interactionLevel: newLevel })
-      .then(() => {
-        console.info('🌸 interactionLevel updated to', newLevel);
-      })
-      .catch((error) => {
-        console.error('🌸🌸🌸 Error updating interaction level:', error);
-      });
-  });
-}
-
 /***** INPUT SANITIZATION *****/
 
 /**
@@ -253,4 +174,3 @@ function normalizeHostnameInput(input) {
 
   return hostname;
 }
-

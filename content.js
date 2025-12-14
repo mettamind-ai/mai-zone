@@ -214,12 +214,10 @@ function setCurrentElement(element) {
  * Handle messages from background script
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
-  switch (message.action) {
-    case 'distractingWebsite':
-      showDistractionWarning(message.data);
-      sendResponse({ received: true });
-      break;
-  }
+  if (message?.action !== 'distractingWebsite') return false;
+
+  showDistractionWarning(message.data);
+  sendResponse({ received: true });
   return true;
 }
 
@@ -393,40 +391,18 @@ function setupWarningButtons(warningDiv) {
  */
 function checkIfDistractingSite() {
   try {
-    chrome.storage.local.get(['isEnabled', 'blockDistractions', 'isInFlow'], ({ isEnabled, blockDistractions, isInFlow }) => {
+    chrome.storage.local.get(['isEnabled', 'blockDistractions'], ({ isEnabled, blockDistractions }) => {
       if (!isEnabled || !blockDistractions) return;
       
       const currentUrl = window.location.href;
       if (!currentUrl || currentUrl === 'about:blank') return;
 
-      // Thêm trạng thái isInFlow vào request để background script biết có đang trong deep work mode không
       sendMessageSafely({
         action: 'checkCurrentUrl',
-        data: { 
-          url: currentUrl,
-          isInFlow: isInFlow 
-        }
+        data: { url: currentUrl }
       }).catch(error => {
         console.error('🌸🌸🌸 Error checking current URL:', error);
       });
-      
-      // Kiểm tra lại trạng thái sau 1 giây để đảm bảo trạng thái mới nhất được áp dụng
-      setTimeout(() => {
-        chrome.storage.local.get(['isInFlow'], (result) => {
-          if (result.isInFlow) {
-            console.log('🌸 Deep Work mode active, rechecking current URL');
-            sendMessageSafely({
-              action: 'checkCurrentUrl',
-              data: { 
-                url: currentUrl,
-                isInFlow: true
-              }
-            }).catch(error => {
-              console.error('🌸🌸🌸 Error rechecking current URL:', error);
-            });
-          }
-        });
-      }, 1000);
     });
   } catch (error) {
     console.error('🌸🌸🌸 Error in checkIfDistractingSite:', error);

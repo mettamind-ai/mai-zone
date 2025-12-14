@@ -10,7 +10,6 @@
 import { initState, setupStateListeners, getState } from './background_state.js';
 import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, handleNotificationButtonClick, sendBreakReminder, startBreakReminder } from './background_breakReminder.js';
-import { initDeepWork } from './background_deepWork.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
@@ -29,7 +28,6 @@ async function initBackgroundScript() {
     // Initialize feature modules
     initDistraction();
     initBreakReminder();
-    initDeepWork();
     
     // Set up event listeners
     setupEventListeners();
@@ -96,9 +94,8 @@ async function setupDefaultSettings() {
     
     await updateState({
       isEnabled: true,
-      interactionLevel: 'balanced',
       blockDistractions: true,
-      breakReminderEnabled: true,
+      breakReminderEnabled: false,
       distractingSites: DEFAULT_DISTRACTING_SITES,
       deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES
     });
