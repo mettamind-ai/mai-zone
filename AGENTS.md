@@ -127,6 +127,8 @@
   - `node --test` (equivalent)
 
 - Smoke test (manual):
-  - Bật **Kích hoạt Mai** + **Chặn trang web gây sao nhãng**
-  - Mở `https://facebook.com` (hoặc site trong `distractingSites`) và kiểm tra overlay cảnh báo
-  - MV3 cold start: vào `chrome://extensions` → “Inspect views / Service worker” → **Stop** service worker, rồi mở lại `https://facebook.com` để chắc chắn SW wake + chặn vẫn hoạt động
+  - **Reload extension (không reinstall)** tại `chrome://extensions` (Developer mode → Reload)
+  - **Tab mới**: mở `https://facebook.com` (hoặc domain chắc chắn nằm trong `distractingSites`) → overlay phải xuất hiện
+  - **Tab cũ** (đã mở trước khi reload): navigate tới cùng domain → overlay vẫn phải xuất hiện
+  - **Toggle state**: tắt `isEnabled` hoặc `blockDistractions` → reload trang → overlay không xuất hiện; bật lại → reload → overlay xuất hiện
+  - **MV3 cold start**: “Inspect views / Service worker” → **Stop** service worker, rồi mở lại `https://facebook.com` để chắc chắn SW wake + chặn vẫn hoạt động
