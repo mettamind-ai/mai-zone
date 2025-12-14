@@ -238,7 +238,8 @@ function isTextInput(element) {
   if (tagName === 'textarea') return true;
   if (tagName === 'input') {
     const inputType = element.type?.toLowerCase();
-    return ['text', 'email', 'search', 'url', 'tel', 'password', 'number'].includes(inputType);
+    // Never monitor password fields.
+    return ['text', 'email', 'search', 'url', 'tel', 'number'].includes(inputType);
   }
   return element.getAttribute('contenteditable') === 'true';
 }
