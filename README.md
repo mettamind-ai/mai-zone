@@ -38,7 +38,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |--------------|--------------------------------------|------------------------------------------------------------|--------------------|--------------|------------|------------------------------------------|
 |<!--r1 c1-->f00|<!--r1 c2-->Text Input Detection     |<!--r1 c3-->Phát hiện và theo dõi người dùng nhập liệu      |<!--r1 c4-->`content.js`   |<!--r1 c5-->`handleFocusIn()`, `handleKeyDown()`  | — |<!--r1 c7-->✅ Done |
 |<!--r2 c1-->f01|<!--r2 c2-->Distraction Blocking     |<!--r2 c3-->Cảnh báo, chặn truy cập trang gây mất tập trung |<!--r2 c4-->`background_distraction.js`, `content.js` |<!--r2 c5-->`isDistractingWebsite()`, `showDistractionWarning()`  | — |<!--r2 c7-->✅ Done |
-|<!--r3 c1-->f02|<!--r3 c2-->AI Text Prediction       |<!--r3 c3-->AI gợi ý giúp người dùng trả lời hội thoại      |<!--r3 c4-->`background_prediction.js`, `content.js` |<!--r3 c5-->`predictUserInput()`, `requestTextPrediction()`  | — |<!--r3 c7-->🔄 Doing   |
+|<!--r3 c1-->f02|<!--r3 c2-->AI Text Prediction (Removed) |<!--r3 c3-->Đã loại bỏ (không dùng LLM key)                 |<!--r3 c4-->— |<!--r3 c5-->— | — |<!--r3 c7-->🚫 Removed |
 |<!--r4 c1-->f03|<!--r4 c2-->Break Reminder           |<!--r4 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r4 c4-->`background_breakReminder.js`, `popup.js` |<!--r4 c5-->`sendBreakReminder()`, `startBreakReminder()` | **Alt + A** |<!--r4 c7-->✅ Done |
 |<!--r5 c1-->f04|<!--r5 c2-->Deep Work Mode           |<!--r5 c3-->Tập trung sâu vào một task 40"                  |<!--r5 c4-->`background_deepWork.js`, `popup.js`  |<!--r5 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter** |<!--r5 c7-->✅ Done |
 |<!--r6 c1-->f05|<!--r6 c2-->State Management         |<!--r6 c3-->Đồng bộ hóa trạng thái toàn extension           |<!--r6 c4-->`background_state.js` |<!--r6 c5-->`initState()`, `getState()`, `updateState()` | — |<!--r6 c7-->✅ Done   |
@@ -71,9 +71,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 
 **🌸🌸 PENDING 🌸🌸**
 
-- [ ] `f02` Mai có thể predict người dùng sẽ type gì vào input elem dựa trên ngữ cảnh để gợi ý. Nó giống tính năng auto complete bằng AI của code IDE / code text editor. Mai khuyến khích người dùng trả lời một cách dí dỏm và nhẹ nhàng.
-  - [x] kiểm tra phần gọi Gemini flash đã hoạt động chưa?
-  - [ ] Cải thiện việc hiểu ngữ cảnh trong các chat apps (messenger, zalo, whatsapp, discord)
+- [x] `f02` (Removed) Loại bỏ AI Text Prediction (không dùng LLM key trong extension)
 
 - [ ] `f??` Mindfulness Reminders - mỗi 15 phút hiển thị:
   - [ ] Những câu quote ngắn gọn gợi lên sự vui vẻ và tâm từ

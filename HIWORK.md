@@ -53,14 +53,14 @@ Extension sử dụng hệ thống truyền tin để giao tiếp giữa các th
 ```javascript
 // Từ content.js đến background.js
 sendMessageSafely({
-  action: 'requestTextPrediction',
-  data: { /* dữ liệu */ }
+  action: 'checkCurrentUrl',
+  data: { url: window.location.href, isInFlow: true }
 });
 
 // Từ background.js đến content.js
-chrome.tabs.sendMessage(tabId, {
-  action: 'textPredictionResult',
-  data: { /* kết quả */ }
+sendMessageToTabSafely(tabId, {
+  action: 'distractingWebsite',
+  data: { /* dữ liệu cảnh báo */ }
 });
 ```
 

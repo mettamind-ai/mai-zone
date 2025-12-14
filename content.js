@@ -3,11 +3,9 @@
  * Content Script: Monitors text input fields, displays UI elements
  * @feature f00 - Text Input Detection
  * @feature f01 - Distraction Blocking (UI part)
- * @feature f02 - AI Text Prediction (UI part)
  * @feature f04c - Deep Work Mode Integration
  */
 
-import { TEXT_PREDICTION_CONFIG } from './constants.js';
 import { sendMessageSafely } from './messaging.js';
 
 /******************************************************************************
@@ -16,16 +14,11 @@ import { sendMessageSafely } from './messaging.js';
 
 // Constants specific to content.js
 const TYPING_INTERVAL = 500; // Typing detection interval (ms)
-const DEFAULT_PREDICTION_DELAY = 800; // Default delay before prediction (ms)
-const DEFAULT_MIN_CHARS = 2; // Default minimum characters to trigger prediction
 
 // Global variables
 let currentElement = null;
 let lastContent = '';
 let typingTimer = null;
-let predictionTimer = null;
-let suggestionElement = null;
-let isPredicting = false;
 
 /******************************************************************************
  * INITIALIZATION
@@ -54,9 +47,6 @@ function initialize() {
     console.log('🌸 YouTube detected, adding SPA navigation listener');
     observeYouTubeNavigation();
   }
-  
-  // Initialize suggestion UI
-  initSuggestionUI();
   
   // [f04c] Listen for deep work status changes
   chrome.storage.onChanged.addListener((changes) => {
@@ -125,55 +115,31 @@ function handleClick(event) {
 /**
  * Handle typing events (shared by keydown and keyup)
  */
-function handleTypingEvent(event, isKeyUp = false) {
+function handleTypingEvent(event) {
   if (!currentElement) return;
   
   clearTimeout(typingTimer);
-  clearTimeout(predictionTimer);
 
-  // Handle special keys in keyup
-  if (isKeyUp) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      captureCurrentContent();
-      hideSuggestion();
-      return;
-    }
-    
-    if (event.key === 'Escape' && suggestionElement) {
-      hideSuggestion();
-      return;
-    }
-    
-    if (event.key === 'Tab' && suggestionElement && suggestionElement.style.display !== 'none') {
-      event.preventDefault();
-      acceptSuggestion();
-      return;
-    }
-
-    // Only schedule prediction for regular typing
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Escape', 'Enter'].includes(event.key)) {
-      const DELAY = TEXT_PREDICTION_CONFIG?.DELAY_BEFORE_SUGGESTION || DEFAULT_PREDICTION_DELAY;
-      predictionTimer = setTimeout(() => captureCurrentContent(true), DELAY);
-      return;
-    }
+  if (event?.key === 'Enter' && !event.shiftKey) {
+    captureCurrentContent();
+    return;
   }
 
-  // Always update content after a delay, but don't trigger prediction
-  typingTimer = setTimeout(() => captureCurrentContent(false), TYPING_INTERVAL);
+  typingTimer = setTimeout(() => captureCurrentContent(), TYPING_INTERVAL);
 }
 
 /**
  * Handle keydown events
  */
 function handleKeyDown(event) {
-  handleTypingEvent(event, false);
+  handleTypingEvent(event);
 }
 
 /**
  * Handle keyup events
  */
 function handleKeyUp(event) {
-  handleTypingEvent(event, true);
+  handleTypingEvent(event);
 }
 
 /******************************************************************************
@@ -183,19 +149,12 @@ function handleKeyUp(event) {
 /**
  * Capture and analyze current content
  */
-function captureCurrentContent(shouldPredict = false) {
+function captureCurrentContent() {
   if (!currentElement) return;
   const currentContentValue = getCurrentElementContent();
   if (currentContentValue !== lastContent) {
     console.debug('🌸 Content updated (len):', currentContentValue.length);
     lastContent = currentContentValue;
-    
-    const MIN_CHARS = TEXT_PREDICTION_CONFIG?.MIN_CHARS_TO_TRIGGER || DEFAULT_MIN_CHARS;
-    if (shouldPredict && currentContentValue.length >= MIN_CHARS) {
-      requestTextPrediction();
-    } else {
-      hideSuggestion();
-    }
   }
 }
 
@@ -238,21 +197,8 @@ function isTextInput(element) {
  */
 function setCurrentElement(element) {
   try {
-    if (currentElement && currentElement !== element) {
-      // Don't trigger prediction when switching elements
-      captureCurrentContent(false);
-    }
     currentElement = element;
     lastContent = getCurrentElementContent();
-
-    sendMessageSafely({
-      action: 'elementFocused',
-      data: {
-        type: element.tagName.toLowerCase(),
-        id: element.id || null,
-        url: window.location.href
-      }
-    });
   } catch (error) {
     console.warn('🌸🌸🌸 Error in setCurrentElement:', error);
     // Prevent further errors by resetting the current element
@@ -271,10 +217,6 @@ function handleBackgroundMessages(message, sender, sendResponse) {
   switch (message.action) {
     case 'distractingWebsite':
       showDistractionWarning(message.data);
-      sendResponse({ received: true });
-      break;
-    case 'textPredictionResult':
-      handlePredictionResult(message.data);
       sendResponse({ received: true });
       break;
   }
@@ -437,180 +379,6 @@ function setupWarningButtons(warningDiv) {
     warningDiv.remove();
     sendMessageSafely({ action: 'closeTab' });
   });
-}
-
-/******************************************************************************
- * TEXT PREDICTION UI
- ******************************************************************************/
-
-/**
- * Khởi tạo UI cho gợi ý văn bản (Text Suggestion)
- * Tạo và thêm phần tử suggestion vào DOM nếu chưa tồn tại
- * @returns {void}
- */
-function initSuggestionUI() {
-  try {
-    if (!suggestionElement) {
-      suggestionElement = document.createElement('div');
-      suggestionElement.id = 'mai-text-suggestion';
-      Object.assign(suggestionElement.style, {
-        position: 'absolute',
-        backgroundColor: 'rgba(255, 143, 171, 0.1)',
-        border: '1px solid rgba(255, 143, 171, 0.3)',
-        borderRadius: '4px',
-        padding: '4px 8px',
-        fontSize: '14px',
-        color: '#888',
-        pointerEvents: 'none',
-        display: 'none',
-        zIndex: '9999',
-        fontStyle: 'italic',
-        fontFamily: 'inherit',
-        maxWidth: '80%',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
-      });
-      document.body.appendChild(suggestionElement);
-      console.log('🌸 Text suggestion UI initialized');
-    }
-  } catch (error) {
-    console.error('🌸🌸🌸 Error initializing suggestion UI:', error);
-  }
-}
-
-/**
- * [f02] Gửi yêu cầu dự đoán văn bản đến background script
- * Phần của tính năng f02 - dự đoán văn bản người dùng sẽ nhập
- * @returns {void}
- */
-function requestTextPrediction() {
-  try {
-    if (!currentElement || isPredicting) return;
-    
-    const MIN_CHARS = TEXT_PREDICTION_CONFIG?.MIN_CHARS_TO_TRIGGER || DEFAULT_MIN_CHARS;
-    const currentContent = getCurrentElementContent();
-    
-    if (!currentContent || currentContent.length < MIN_CHARS) return;
-    
-    isPredicting = true;
-    console.log('🌸 Requesting text prediction:', { length: currentContent.length });
-    
-    sendMessageSafely({
-      action: 'requestTextPrediction',
-      data: {
-        currentContent,
-        inputType: currentElement.tagName.toLowerCase(),
-        placeholder: currentElement.placeholder || '',
-        pageTitle: document.title,
-        url: window.location.href
-      }
-    }).finally(() => {
-      isPredicting = false;
-    });
-  } catch (error) {
-    console.error('🌸🌸🌸 Error requesting text prediction:', error);
-    isPredicting = false;
-  }
-}
-
-/**
- * Handle prediction result from background script
- */
-function handlePredictionResult(data) {
-  if (!data?.suggestion || !currentElement) return;
-  
-  console.log('🌸 Received text prediction:', { length: data.suggestion.length });
-  
-  if (suggestionElement) {
-    positionSuggestionElement();
-    suggestionElement.textContent = data.suggestion;
-    suggestionElement.style.display = 'block';
-    
-    setTimeout(hideSuggestion, 5000);
-  }
-}
-
-/**
- * Định vị phần tử gợi ý dưới đúng vị trí của trường nhập liệu
- * Tính toán vị trí cho cả input thông thường và textarea
- * @returns {void}
- */
-function positionSuggestionElement() {
-  try {
-    if (!currentElement || !suggestionElement) return;
-    
-    // Đọc thông tin về vị trí một lần để tránh layout thrashing
-    const rect = currentElement.getBoundingClientRect();
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    
-    const isTextarea = currentElement.tagName.toLowerCase() === 'textarea';
-    const style = window.getComputedStyle(currentElement);
-    const lineHeight = parseInt(style.lineHeight, 10) || 18;
-    const paddingTop = parseInt(style.paddingTop, 10) || 0;
-    const paddingLeft = parseInt(style.paddingLeft, 10) || 0;
-    const direction = style.direction; // Hỗ trợ cho văn bản RTL
-    
-    let offsetTop = isTextarea
-      ? paddingTop + (currentElement.value.split('\n').length - 1) * lineHeight
-      : rect.height + 4;
-      
-    let offsetLeft = isTextarea
-      ? paddingLeft + (currentElement.value.split('\n').pop()?.length || 0) * 8
-      : 8;
-    
-    // Điều chỉnh vị trí cho văn bản RTL
-    if (direction === 'rtl') {
-      offsetLeft = rect.width - offsetLeft - (suggestionElement.offsetWidth || 150);
-    }
-    
-    // Thực hiện tất cả các ghi DOM cùng một lúc
-    requestAnimationFrame(() => {
-      Object.assign(suggestionElement.style, {
-        top: `${rect.top + scrollTop + offsetTop}px`,
-        left: `${rect.left + scrollLeft + offsetLeft}px`
-      });
-    });
-  } catch (error) {
-    console.error('🌸🌸🌸 Error positioning suggestion element:', error);
-  }
-}
-
-/**
- * Accept current suggestion
- */
-function acceptSuggestion() {
-  if (!suggestionElement || !currentElement || suggestionElement.style.display === 'none') return;
-  
-  const suggestion = suggestionElement.textContent;
-  if (!suggestion) return;
-  
-  const isContentEditable = currentElement.getAttribute('contenteditable') === 'true';
-  
-  if (isContentEditable) {
-    currentElement.innerText += suggestion;
-  } else {
-    currentElement.value += suggestion;
-  }
-  
-  currentElement.dispatchEvent(new Event('input', { bubbles: true }));
-  hideSuggestion();
-  
-  sendMessageSafely({
-    action: 'suggestionAccepted',
-    data: { suggestion }
-  });
-}
-
-/**
- * Hide suggestion element
- */
-function hideSuggestion() {
-  if (suggestionElement) {
-    suggestionElement.style.display = 'none';
-    suggestionElement.textContent = '';
-  }
 }
 
 /******************************************************************************

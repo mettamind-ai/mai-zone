@@ -2,34 +2,9 @@
  * MaiZone Browser Extension
  * Constants: Centralized configuration values
  * @feature f01 - Distraction Blocking
- * @feature f02 - AI Text Prediction
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  */
-
-/******************************************************************************
- * TEXT PREDICTION [f02]
- ******************************************************************************/
-
-export const TEXT_PREDICTION_CONFIG = {
-  // Delay before showing suggestion (ms)
-  DELAY_BEFORE_SUGGESTION: 800,
-  // Minimum characters to trigger prediction
-  MIN_CHARS_TO_TRIGGER: 2,
-  // Minimum time between API calls (ms)
-  MIN_TIME_BETWEEN_CALLS: 3000,
-  // Maximum suggestion length to display
-  MAX_SUGGESTION_LENGTH: 50
-};
-
-export const GEMINI_CONFIG = {
-  // Model name (may change with newer versions)
-  MODEL_NAME: 'gemini-2.5-flash-preview-04-17',
-  // Thinking budget configuration (Gemini 2.5 Flash feature)
-  THINKING_CONFIG: { HIGH: 8192, MODERATE: 1024, LOW: 512, NONE: 0 },
-  // Maximum output tokens
-  MAX_OUTPUT_TOKENS: 900
-};
 
 /******************************************************************************
  * BREAK REMINDER [f03]

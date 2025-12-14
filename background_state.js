@@ -6,18 +6,131 @@
 
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
-// Initial state
-let state = {
+/***** DEFAULT STATE *****/
+
+export const DEFAULT_STATE = {
   isEnabled: true,
   interactionLevel: 'balanced',
   currentTask: '',
   isInFlow: false,
   blockDistractions: true,
-  textPredictionEnabled: true,
   breakReminderEnabled: true,
   distractingSites: DEFAULT_DISTRACTING_SITES,
-  deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES
+  deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES,
+  reminderStartTime: null,
+  reminderInterval: null,
+  reminderExpectedEndTime: null
 };
+
+// Initial state
+let state = { ...DEFAULT_STATE };
+
+/***** STATE NORMALIZATION *****/
+
+function normalizeBoolean(value, fallback) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function normalizeString(value, fallback) {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function normalizeInteractionLevel(value, fallback) {
+  if (value === 'balanced' || value === 'minimal' || value === 'max') return value;
+  return fallback;
+}
+
+function normalizeArrayOfStrings(value, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  return value
+    .filter((v) => typeof v === 'string')
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function normalizeNumberOrNull(value, fallback) {
+  if (value === null) return null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function enforceStateInvariants(nextState) {
+  const sanitized = { ...nextState };
+
+  if (!sanitized.currentTask) {
+    sanitized.currentTask = '';
+  }
+
+  if (sanitized.isInFlow && !sanitized.currentTask) {
+    sanitized.isInFlow = false;
+  }
+
+  if (!sanitized.isInFlow || !sanitized.currentTask) {
+    sanitized.isInFlow = false;
+    sanitized.reminderStartTime = null;
+    sanitized.reminderInterval = null;
+    sanitized.reminderExpectedEndTime = null;
+  }
+
+  return sanitized;
+}
+
+function sanitizeStoredState(storedState) {
+  const base = { ...DEFAULT_STATE };
+  const stored = storedState || {};
+
+  const merged = {
+    isEnabled: normalizeBoolean(stored.isEnabled, base.isEnabled),
+    interactionLevel: normalizeInteractionLevel(stored.interactionLevel, base.interactionLevel),
+    currentTask: normalizeString(stored.currentTask, base.currentTask),
+    isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
+    blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
+    breakReminderEnabled: normalizeBoolean(stored.breakReminderEnabled, base.breakReminderEnabled),
+    distractingSites: normalizeArrayOfStrings(stored.distractingSites, base.distractingSites),
+    deepWorkBlockedSites: normalizeArrayOfStrings(stored.deepWorkBlockedSites, base.deepWorkBlockedSites),
+    reminderStartTime: normalizeNumberOrNull(stored.reminderStartTime, base.reminderStartTime),
+    reminderInterval: normalizeNumberOrNull(stored.reminderInterval, base.reminderInterval),
+    reminderExpectedEndTime: normalizeNumberOrNull(stored.reminderExpectedEndTime, base.reminderExpectedEndTime)
+  };
+
+  return enforceStateInvariants({ ...base, ...merged });
+}
+
+function sanitizeStateUpdates(updates) {
+  if (!updates || typeof updates !== 'object') return {};
+
+  const sanitized = {};
+
+  if ('isEnabled' in updates) sanitized.isEnabled = normalizeBoolean(updates.isEnabled, state.isEnabled);
+  if ('interactionLevel' in updates) {
+    sanitized.interactionLevel = normalizeInteractionLevel(updates.interactionLevel, state.interactionLevel);
+  }
+  if ('currentTask' in updates) sanitized.currentTask = normalizeString(updates.currentTask, state.currentTask);
+  if ('isInFlow' in updates) sanitized.isInFlow = normalizeBoolean(updates.isInFlow, state.isInFlow);
+  if ('blockDistractions' in updates) {
+    sanitized.blockDistractions = normalizeBoolean(updates.blockDistractions, state.blockDistractions);
+  }
+  if ('breakReminderEnabled' in updates) {
+    sanitized.breakReminderEnabled = normalizeBoolean(updates.breakReminderEnabled, state.breakReminderEnabled);
+  }
+  if ('distractingSites' in updates) {
+    sanitized.distractingSites = normalizeArrayOfStrings(updates.distractingSites, state.distractingSites);
+  }
+  if ('deepWorkBlockedSites' in updates) {
+    sanitized.deepWorkBlockedSites = normalizeArrayOfStrings(updates.deepWorkBlockedSites, state.deepWorkBlockedSites);
+  }
+
+  if ('reminderStartTime' in updates) {
+    sanitized.reminderStartTime = normalizeNumberOrNull(updates.reminderStartTime, state.reminderStartTime);
+  }
+  if ('reminderInterval' in updates) {
+    sanitized.reminderInterval = normalizeNumberOrNull(updates.reminderInterval, state.reminderInterval);
+  }
+  if ('reminderExpectedEndTime' in updates) {
+    sanitized.reminderExpectedEndTime = normalizeNumberOrNull(updates.reminderExpectedEndTime, state.reminderExpectedEndTime);
+  }
+
+  return enforceStateInvariants({ ...state, ...sanitized });
+}
 
 // Load state from storage on initialization
 /**
@@ -30,8 +143,14 @@ export async function initState() {
       chrome.storage.local.get(null, data => resolve(data));
     });
     
-    // Merge stored state with default state
-    state = { ...state, ...storedState };
+    // Remove unknown keys from storage to avoid stale/deprecated state lingering
+    const allowedKeys = new Set(Object.keys(DEFAULT_STATE));
+    const deprecatedKeys = Object.keys(storedState || {}).filter((key) => !allowedKeys.has(key));
+    if (deprecatedKeys.length) {
+      await new Promise((resolve) => chrome.storage.local.remove(deprecatedKeys, () => resolve()));
+    }
+
+    state = sanitizeStoredState(storedState);
     
     // Ensure default state is saved to storage if not present
     await new Promise(resolve => {
@@ -65,19 +184,30 @@ export function getState(key = null) {
  */
 export async function updateState(updates) {
   try {
+    const nextState = sanitizeStateUpdates(updates);
+    const delta = {};
+
+    Object.keys(nextState).forEach((key) => {
+      if (state[key] !== nextState[key]) {
+        delta[key] = nextState[key];
+      }
+    });
+
+    if (!Object.keys(delta).length) return true;
+
     // Update in-memory state
-    state = { ...state, ...updates };
+    state = { ...state, ...delta };
     
     // Persist to storage
     await new Promise(resolve => {
-      chrome.storage.local.set(updates, () => resolve());
+      chrome.storage.local.set(delta, () => resolve());
     });
     
     // Broadcast state update to other parts of the extension
     try {
       chrome.runtime.sendMessage({
         action: 'stateUpdated',
-        state: updates
+        state: delta
       }).catch(() => {
         // Ignore errors from no listeners / SW lifecycle
       });
@@ -116,7 +246,7 @@ export function setupStateListeners() {
       }
 
       updateState(message.payload)
-        .then(() => sendResponse({ success: true }))
+        .then((success) => sendResponse({ success: !!success }))
         .catch(error => sendResponse({ success: false, error: error?.message || String(error) }));
       return true; // Keep channel open for async response
     }

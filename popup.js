@@ -206,7 +206,10 @@ function updateEnabledState(isEnabled) {
 
 /**
  * Handle toggle changes
- * @feature f02 - AI Text Prediction
+ * @feature f01 - Distraction Blocking
+ * @feature f03 - Break Reminder
+ * @feature f04 - Deep Work Mode
+ * @feature f05 - State Management
  */
 function handleToggle(settingKey) {
   const toggleMap = {
