@@ -13,8 +13,10 @@ import { messageActions } from './actions.js';
 
 const BREAK_REMINDER_END_ALARM = 'maizone_breakReminderEnd';
 const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
-const BADGE_TICK_INTERVAL_SEC = 1;
-const BADGE_TICK_INTERVAL_MINUTES = BADGE_TICK_INTERVAL_SEC / 60;
+const BADGE_TICK_INTERVAL_MS = 1000;
+
+// Runtime flag (best-effort): when true, badge is expected to be updated by offscreen.
+let hasOffscreenBadgeTicker = false;
 
 let unsubscribeStateDelta = null;
 
@@ -192,8 +194,13 @@ async function handleAlarm(alarm) {
   await ensureInitialized();
 
   if (alarm.name === BREAK_REMINDER_BADGE_ALARM) {
-    // Fallback tick only (offscreen handles high-precision when available).
     updateBadgeWithTimerDisplay();
+
+    // If offscreen is unavailable, keep scheduling 1-second ticks via one-shot alarms.
+    // NOTE: This wakes the SW every second during Deep Work; use only as fallback.
+    if (!hasOffscreenBadgeTicker) {
+      scheduleNextBadgeTickAlarm();
+    }
     return;
   }
 
@@ -214,24 +221,43 @@ async function scheduleBreakReminderAlarms(expectedEndTime) {
   try {
     chrome.alarms.create(BREAK_REMINDER_END_ALARM, { when: expectedEndTime });
 
-    const hasOffscreen = await ensureOffscreenDocument();
+    hasOffscreenBadgeTicker = await ensureOffscreenDocument();
+
     // Badge tick:
     // - Prefer offscreen (ticks every second without waking SW).
-    // - If offscreen is unavailable, fall back to alarms (best-effort; some browsers may clamp).
-    const badgeTick = hasOffscreen
-      ? { delayInMinutes: 1, periodInMinutes: 1 }
-      : { delayInMinutes: BADGE_TICK_INTERVAL_MINUTES, periodInMinutes: BADGE_TICK_INTERVAL_MINUTES };
-    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, badgeTick);
-
-    if (hasOffscreen) {
-      // Offscreen can tick badge every second without waking the SW constantly.
-      return true;
+    // - If offscreen is unavailable, fall back to alarms ticking every second (wakes SW).
+    if (hasOffscreenBadgeTicker) {
+      chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
+    } else {
+      scheduleNextBadgeTickAlarm();
     }
+
+    return hasOffscreenBadgeTicker;
   } catch (error) {
     console.error('🌸🌸🌸 Error scheduling break reminder alarms:', error);
   }
 
   return false;
+}
+
+/**
+ * Schedule the next 1-second badge tick using a one-shot alarm.
+ * @returns {void}
+ */
+function scheduleNextBadgeTickAlarm() {
+  try {
+    const { breakReminderEnabled, isInFlow, currentTask, reminderExpectedEndTime } = getState();
+    if (!breakReminderEnabled || !isInFlow || !currentTask) return;
+
+    // Stop ticking after the expected end time.
+    if (typeof reminderExpectedEndTime === 'number' && Number.isFinite(reminderExpectedEndTime)) {
+      if (Date.now() >= reminderExpectedEndTime) return;
+    }
+
+    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { when: Date.now() + BADGE_TICK_INTERVAL_MS });
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -245,6 +271,8 @@ function stopBreakReminder() {
   } catch (error) {
     console.warn('🌸🌸🌸 Error clearing break reminder alarms:', error);
   }
+
+  hasOffscreenBadgeTicker = false;
 
   try {
     chrome.action?.setBadgeText({ text: '' });
