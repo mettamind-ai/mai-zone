@@ -20,7 +20,7 @@ Các tính năng lớn sẽ chia nhỏ thành nhiều task con, đánh thêm ký
 Việc đặt tag tính năng trực tiếp vào **source code comments** giúp tìm kiếm, theo dõi và hiểu code dễ dàng hơn.
 
 ## Hai công cụ quan trọng để quản lý tính năng là `FIT` và `FAT`
-- **`FIT` (Feature Tag Indexing Table)**: Bảng tổng hợp nhanh các tính năng và phần code liên quan.
+- **`FIT` (Feature Indexing Table)**: Bảng tổng hợp nhanh các tính năng và phần code liên quan.
 - **`FAT` (Features And sub-Tasks Checklist)**: mô tả cụ thể và theo dõi chi tiết tiến độ các tính năng.
 
 ## Sử dụng `FIT` và `FAT` để đạt hiệu quả cao nhất
@@ -32,7 +32,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 ---
 
 
-## `FIT` (Feature Tag Indexing Table)
+## `FIT` (Feature Indexing Table)
 
 |<!--r0 c1-->Tag|<!--r0 c2-->Tên                      |<!--r0 c3-->Tính năng                                       |<!--r0 c4-->Files liên quan|<!--r0 c5-->Hàm chính|<!--r0 c6-->Shortcut / UI|<!--r0 c7-->Trạng_thái|
 |--------------|--------------------------------------|------------------------------------------------------------|--------------------|--------------|------------|------------------------------------------|
