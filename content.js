@@ -68,9 +68,16 @@ const TYPING_INTERVAL = 500; // Typing detection interval (ms)
 
 // Global variables
 let currentElement = null;
-let lastContent = '';
+let lastContentLength = 0;
 let typingTimer = null;
 let isExtensionEnabled = true;
+let isDistractionBlockingEnabled = true;
+let domListenersAttached = false;
+
+// YouTube SPA monitoring
+let youtubeObserver = null;
+let youtubeFallbackIntervalId = null;
+let lastYoutubeUrl = '';
 
 /******************************************************************************
  * INITIALIZATION
@@ -82,43 +89,25 @@ let isExtensionEnabled = true;
 function initialize() {
   console.log('🌸 Mai content script initialized');
 
-  // Load enabled state early so we can avoid unnecessary listeners work when disabled
-  chrome.storage.local.get(['isEnabled'], ({ isEnabled }) => {
+  // Load state early so we can avoid unnecessary listeners work when disabled
+  chrome.storage.local.get(['isEnabled', 'blockDistractions'], ({ isEnabled, blockDistractions }) => {
     isExtensionEnabled = typeof isEnabled === 'boolean' ? isEnabled : true;
+    isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
+    syncContentScriptActiveState();
   });
-
-  // Set up event listeners
-  document.addEventListener('focusin', handleFocusIn);
-  document.addEventListener('keydown', handleKeyDown);
-  document.addEventListener('keyup', handleKeyUp);
-  document.addEventListener('click', handleClick);
-
-  // Listen for messages from background script
+  
+  // Listen for messages from background script (attach once; will ignore when disabled)
   chrome.runtime.onMessage.addListener(handleBackgroundMessages);
 
-  // Check if current site is distracting
-  checkIfDistractingSite();
-
-  // Add special handling for YouTube SPA
-  if (window.location.hostname.includes('youtube.com')) {
-    console.log('🌸 YouTube detected, adding SPA navigation listener');
-    observeYouTubeNavigation();
-  }
-  
-  // [f04c] Listen for deep work status changes
+  // [f04c] Listen for deep work status changes and settings
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.isEnabled) {
       isExtensionEnabled = !!changes.isEnabled.newValue;
+      syncContentScriptActiveState();
+    }
 
-      if (!isExtensionEnabled) {
-        clearTimeout(typingTimer);
-        typingTimer = null;
-        currentElement = null;
-        lastContent = '';
-
-        document.getElementById('mai-distraction-warning')?.remove?.();
-        return;
-      }
+    if (changes.blockDistractions) {
+      isDistractionBlockingEnabled = !!changes.blockDistractions.newValue;
     }
 
     if (changes.isInFlow) {
@@ -127,6 +116,70 @@ function initialize() {
       checkIfDistractingSite();
     }
   });
+}
+
+/**
+ * Attach DOM listeners only when extension is enabled.
+ * @returns {void}
+ */
+function attachDomListeners() {
+  if (domListenersAttached) return;
+
+  document.addEventListener('focusin', handleFocusIn);
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+  document.addEventListener('click', handleClick);
+
+  domListenersAttached = true;
+}
+
+/**
+ * Detach DOM listeners when extension is disabled to reduce overhead.
+ * @returns {void}
+ */
+function detachDomListeners() {
+  if (!domListenersAttached) return;
+
+  document.removeEventListener('focusin', handleFocusIn);
+  document.removeEventListener('keydown', handleKeyDown);
+  document.removeEventListener('keyup', handleKeyUp);
+  document.removeEventListener('click', handleClick);
+
+  domListenersAttached = false;
+}
+
+/**
+ * Stop any transient work/UI and reset in-memory state.
+ * @returns {void}
+ */
+function resetTransientState() {
+  clearTimeout(typingTimer);
+  typingTimer = null;
+  currentElement = null;
+  lastContentLength = 0;
+
+  stopYouTubeNavigationObserver();
+  document.getElementById('mai-distraction-warning')?.remove?.();
+}
+
+/**
+ * Sync active state (enabled/disabled) for the content script.
+ * @returns {void}
+ */
+function syncContentScriptActiveState() {
+  if (!isExtensionEnabled) {
+    detachDomListeners();
+    resetTransientState();
+    return;
+  }
+
+  attachDomListeners();
+
+  if (window.location.hostname.includes('youtube.com')) {
+    startYouTubeNavigationObserver();
+  }
+
+  checkIfDistractingSite();
 }
 
 
@@ -225,24 +278,26 @@ function handleKeyUp(event) {
  */
 function captureCurrentContent() {
   if (!currentElement) return;
-  const currentContentValue = getCurrentElementContent();
-  if (currentContentValue !== lastContent) {
-    console.debug('🌸 Content updated (len):', currentContentValue.length);
-    lastContent = currentContentValue;
+  const currentLength = getCurrentElementContentLength();
+  if (currentLength !== lastContentLength) {
+    console.debug('🌸 Content updated (len):', currentLength);
+    lastContentLength = currentLength;
   }
 }
 
 /**
- * Get content from current element
+ * Get content length from current element (avoid storing content for privacy).
  */
-function getCurrentElementContent() {
-  if (!currentElement) return '';
+function getCurrentElementContentLength() {
+  if (!currentElement) return 0;
   const tagName = currentElement.tagName.toLowerCase();
-  return tagName === 'textarea' || tagName === 'input' 
-    ? currentElement.value 
-    : currentElement.getAttribute('contenteditable') === 'true'
-      ? currentElement.innerText 
-      : '';
+  if (tagName === 'textarea' || tagName === 'input') {
+    return (currentElement.value || '').length;
+  }
+  if (currentElement.getAttribute('contenteditable') === 'true') {
+    return (currentElement.innerText || '').length;
+  }
+  return 0;
 }
 
 
@@ -273,7 +328,7 @@ function isTextInput(element) {
 function setCurrentElement(element) {
   try {
     currentElement = element;
-    lastContent = getCurrentElementContent();
+    lastContentLength = getCurrentElementContentLength();
   } catch (error) {
     console.warn('🌸🌸🌸 Error in setCurrentElement:', error);
     // Prevent further errors by resetting the current element
@@ -289,6 +344,7 @@ function setCurrentElement(element) {
  * Handle messages from background script
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
+  if (!isExtensionEnabled) return false;
   if (message?.action !== 'distractingWebsite') return false;
 
   showDistractionWarning(message.data);
@@ -466,18 +522,14 @@ function setupWarningButtons(warningDiv) {
  */
 function checkIfDistractingSite() {
   try {
-    chrome.storage.local.get(['isEnabled', 'blockDistractions'], ({ isEnabled, blockDistractions }) => {
-      if (!isEnabled || !blockDistractions) return;
-      
-      const currentUrl = window.location.href;
-      if (!currentUrl || currentUrl === 'about:blank') return;
+    if (!isExtensionEnabled || !isDistractionBlockingEnabled) return;
 
-      sendMessageSafely({
-        action: 'checkCurrentUrl',
-        data: { url: currentUrl }
-      }).catch(error => {
-        console.error('🌸🌸🌸 Error checking current URL:', error);
-      });
+    const currentUrl = window.location.href;
+    if (!currentUrl || currentUrl === 'about:blank') return;
+
+    sendMessageSafely({
+      action: 'checkCurrentUrl',
+      data: { url: currentUrl }
     });
   } catch (error) {
     console.error('🌸🌸🌸 Error in checkIfDistractingSite:', error);
@@ -493,12 +545,15 @@ function checkIfDistractingSite() {
  * Sử dụng MutationObserver thay vì polling cho hiệu suất tốt hơn
  * @returns {void}
  */
-function observeYouTubeNavigation() {
+function startYouTubeNavigationObserver() {
+  if (!isExtensionEnabled) return;
+  if (youtubeObserver || youtubeFallbackIntervalId) return;
+
+  lastYoutubeUrl = window.location.href;
+
   try {
-    let lastYoutubeUrl = window.location.href;
-    
     // Sử dụng MutationObserver để theo dõi thay đổi DOM thay vì polling
-    const observer = new MutationObserver((mutations) => {
+    youtubeObserver = new MutationObserver(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastYoutubeUrl) {
         console.log('🌸 YouTube URL changed:', lastYoutubeUrl, '->', currentUrl);
@@ -512,16 +567,22 @@ function observeYouTubeNavigation() {
     });
     
     // Theo dõi thay đổi trong thẻ title và body để phát hiện điều hướng
-    observer.observe(document.querySelector('head > title'), { subtree: true, characterData: true, childList: true });
-    observer.observe(document.body, { childList: true, subtree: true });
+    const titleEl = document.querySelector('head > title');
+    if (titleEl) {
+      youtubeObserver.observe(titleEl, { subtree: true, characterData: true, childList: true });
+    }
+    if (document.body) {
+      youtubeObserver.observe(document.body, { childList: true, subtree: true });
+    }
     
     console.log('🌸 YouTube navigation observer started');
   } catch (error) {
     console.error('🌸🌸🌸 Error setting up YouTube navigation observer:', error);
     
     // Fallback to polling if MutationObserver fails
-    let lastYoutubeUrl = window.location.href;
-    setInterval(() => {
+    lastYoutubeUrl = window.location.href;
+    youtubeObserver = null;
+    youtubeFallbackIntervalId = setInterval(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastYoutubeUrl) {
         console.log('🌸 YouTube URL changed (fallback method):', lastYoutubeUrl, '->', currentUrl);
@@ -534,6 +595,26 @@ function observeYouTubeNavigation() {
       }
     }, 1000);
   }
+}
+
+/**
+ * Stop YouTube SPA navigation observer/polling to reduce overhead when disabled.
+ * @returns {void}
+ */
+function stopYouTubeNavigationObserver() {
+  try {
+    youtubeObserver?.disconnect?.();
+  } catch (error) {
+    // Ignore
+  }
+  youtubeObserver = null;
+
+  if (youtubeFallbackIntervalId) {
+    clearInterval(youtubeFallbackIntervalId);
+    youtubeFallbackIntervalId = null;
+  }
+
+  lastYoutubeUrl = '';
 }
 
 /******************************************************************************
