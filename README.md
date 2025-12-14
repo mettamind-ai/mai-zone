@@ -71,8 +71,6 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 
 **🌸🌸 PENDING 🌸🌸**
 
-- [x] `f02` (Removed) Loại bỏ AI Text Prediction (không dùng LLM key trong extension)
-
 - [ ] `f??` Mindfulness Reminders - mỗi 15 phút hiển thị:
   - [ ] Những câu quote ngắn gọn gợi lên sự vui vẻ và tâm từ
   - [ ] hoặc Nhắc nhở tập thể dục và giãn cơ định kỳ
