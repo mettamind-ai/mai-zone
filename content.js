@@ -113,8 +113,9 @@ Các lệnh tắt cần ghi nhớ:
 - vx: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi
 - vd: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.`;
 
-// [f03] Opera badge tick fallback: keep badge updated per-second by waking the SW via messages.
-const OPERA_BADGE_TICK_INTERVAL_MS = 1000;
+// [f03] Opera badge tick fallback: keep badge updated per-second by keeping the SW active via a Port.
+const OPERA_BADGE_PORT_NAME = 'maizoneBreakReminderBadgeTicker';
+const OPERA_BADGE_PORT_KEEPALIVE_MS = 25_000;
 
 // Message actions (prefer shared global injected via `actions_global.js`).
 const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
@@ -140,8 +141,8 @@ let isDistractionBlockingEnabled = true;
 let domListenersAttached = false;
 
 // [f03] Opera badge tick fallback state
-let operaBadgeTickIntervalId = null;
-let operaBadgeTickInFlight = false;
+let operaBadgePort = null;
+let operaBadgePortKeepaliveIntervalId = null;
 
 // [f07] ChatGPT helpers state
 let isChatgptZenModeEnabled = true;
@@ -162,6 +163,10 @@ let lastYoutubeUrl = '';
  * Initialize content script
  */
 function initialize() {
+  // Prevent double-initialization if this file gets programmatically injected.
+  if (globalThis.__MAIZONE_CONTENT_SCRIPT_INITIALIZED) return;
+  globalThis.__MAIZONE_CONTENT_SCRIPT_INITIALIZED = true;
+
   console.log('🌸 Mai content script initialized');
 
   // Load settings early so we can avoid unnecessary work for disabled features
@@ -289,21 +294,43 @@ function isDeepWorkTimerActive(data) {
  * @returns {void}
  */
 function startOperaBadgeTickFallback() {
-  if (operaBadgeTickIntervalId) return;
+  if (operaBadgePort) return;
 
-  operaBadgeTickIntervalId = setInterval(() => {
-    if (document.visibilityState !== 'visible') return;
-    if (operaBadgeTickInFlight) return;
-    operaBadgeTickInFlight = true;
+  try {
+    operaBadgePort = chrome.runtime.connect({ name: OPERA_BADGE_PORT_NAME });
+  } catch {
+    operaBadgePort = null;
+    return;
+  }
 
-    sendMessageSafely({ action: messageActions.breakReminderBadgeTick }, { timeoutMs: 800 })
-      .catch(() => {})
-      .finally(() => {
-        operaBadgeTickInFlight = false;
-      });
-  }, OPERA_BADGE_TICK_INTERVAL_MS);
+  try {
+    operaBadgePort.onDisconnect.addListener(() => {
+      operaBadgePort = null;
+      if (operaBadgePortKeepaliveIntervalId) clearInterval(operaBadgePortKeepaliveIntervalId);
+      operaBadgePortKeepaliveIntervalId = null;
+      syncOperaBadgeTickFallback();
+    });
+  } catch {
+    // ignore
+  }
 
-  // Kick immediately once (so badge updates right away without waiting 1s).
+  // Keepalive: some browsers may still stop the SW if no events arrive.
+  operaBadgePortKeepaliveIntervalId = setInterval(() => {
+    try {
+      operaBadgePort?.postMessage?.({ type: 'keepalive' });
+    } catch {
+      // ignore
+    }
+  }, OPERA_BADGE_PORT_KEEPALIVE_MS);
+
+  // Ask background to start per-second badge ticker (best-effort).
+  try {
+    operaBadgePort.postMessage({ type: 'start' });
+  } catch {
+    // ignore
+  }
+
+  // Also kick a one-off tick message for immediate update on some browsers.
   sendMessageSafely({ action: messageActions.breakReminderBadgeTick }, { timeoutMs: 800 }).catch(() => {});
 }
 
@@ -312,9 +339,22 @@ function startOperaBadgeTickFallback() {
  * @returns {void}
  */
 function stopOperaBadgeTickFallback() {
-  if (operaBadgeTickIntervalId) clearInterval(operaBadgeTickIntervalId);
-  operaBadgeTickIntervalId = null;
-  operaBadgeTickInFlight = false;
+  if (operaBadgePortKeepaliveIntervalId) clearInterval(operaBadgePortKeepaliveIntervalId);
+  operaBadgePortKeepaliveIntervalId = null;
+
+  try {
+    operaBadgePort?.postMessage?.({ type: 'stop' });
+  } catch {
+    // ignore
+  }
+
+  try {
+    operaBadgePort?.disconnect?.();
+  } catch {
+    // ignore
+  }
+
+  operaBadgePort = null;
 }
 
 /**
@@ -326,7 +366,7 @@ function syncOperaBadgeTickFallback(prefetched) {
   if (!isOperaBrowser()) return;
 
   const syncWithData = (data) => {
-    const shouldRun = isDeepWorkTimerActive(data) && document.visibilityState === 'visible';
+    const shouldRun = isDeepWorkTimerActive(data);
     if (shouldRun) startOperaBadgeTickFallback();
     else stopOperaBadgeTickFallback();
   };
@@ -455,7 +495,7 @@ function handleClipmdHotkey(event) {
   (async () => {
     const reply = await sendMessageSafely(
       { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'contentHotkey' } },
-      { timeoutMs: 1200 }
+      { timeoutMs: 2500 }
     );
 
     if (reply?.success) return;
@@ -903,6 +943,13 @@ function setCurrentElement(element) {
  * Handle messages from background script
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
+  if (message?.action === messageActions.stateUpdated) {
+    // [f03] Opera: ensure badge ticker fallback stays in sync with background state updates.
+    syncOperaBadgeTickFallback();
+    sendResponse?.({ received: true });
+    return true;
+  }
+
   if (message?.action === messageActions.clipmdStart) {
     startClipmdPickMode();
     sendResponse({ received: true });

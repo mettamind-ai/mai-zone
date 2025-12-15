@@ -4,6 +4,7 @@
  * @feature f01 - Distraction Blocking
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
+ * @feature f06 - ClipMD (Clipboard to Markdown)
  */
 
 /******************************************************************************
@@ -61,3 +62,10 @@ export const DEFAULT_DEEPWORK_BLOCKED_SITES = [
   'messenger.com',
   'whatsapp.com'
 ];
+
+/******************************************************************************
+ * CLIPMD [f06]
+ ******************************************************************************/
+
+// Popup-to-background port name (used to detect popup close and cancel ClipMD inspect mode).
+export const CLIPMD_POPUP_PORT_NAME = 'maizoneClipmdPopup';

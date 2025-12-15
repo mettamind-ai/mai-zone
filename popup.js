@@ -9,6 +9,7 @@
 import { sendMessageSafely } from './messaging.js';
 import { getStateSafely, updateStateSafely } from './state_helpers.js';
 import { messageActions } from './actions.js';
+import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
 
 /******************************************************************************
  * ELEMENT REFERENCES AND VARIABLES
@@ -24,6 +25,7 @@ const taskInput = document.getElementById('task-input');  // Input field để n
 
 // Biến toàn cục quản lý trạng thái
 let countdownInterval = null; // Interval cho đồng hồ đếm ngược
+let clipmdPopupPort = null;
 
 /******************************************************************************
  * INITIALIZATION
@@ -37,6 +39,7 @@ document.addEventListener('DOMContentLoaded', initializePopup);
 function initializePopup() {
   console.log('🌸 Mai popup initialized');
   loadState();  // Load các cài đặt từ background state
+  setupClipmdPopupLifecyclePort(); // [f06] Detect popup close (cancel inspect if idle)
   startClipmdOnPopupOpen(); // [f06] Auto-start ClipMD on current tab
 
   // Đăng ký các event listeners
@@ -71,6 +74,34 @@ function initializePopup() {
  ******************************************************************************/
 
 /**
+ * Open a long-lived Port so background can detect popup close reliably.
+ * @feature f06 - ClipMD (Clipboard to Markdown)
+ * @returns {void}
+ */
+function setupClipmdPopupLifecyclePort() {
+  try {
+    clipmdPopupPort = chrome.runtime.connect({ name: CLIPMD_POPUP_PORT_NAME });
+  } catch {
+    clipmdPopupPort = null;
+    return;
+  }
+
+  try {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tabId = tabs?.[0]?.id;
+      if (typeof tabId !== 'number') return;
+      try {
+        clipmdPopupPort?.postMessage?.({ tabId });
+      } catch {
+        // ignore
+      }
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Start ClipMD pick mode as soon as the popup opens (best-effort).
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @returns {void}
@@ -79,9 +110,20 @@ function startClipmdOnPopupOpen() {
   // Fire-and-forget: popup may close quickly; ClipMD lives in the tab.
   (async () => {
     try {
+      const activeTab = await new Promise((resolve) => {
+        try {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0] || null));
+        } catch {
+          resolve(null);
+        }
+      });
+
+      const url = typeof activeTab?.url === 'string' ? activeTab.url : '';
+      if (!url.startsWith('http://') && !url.startsWith('https://')) return;
+
       const reply = await sendMessageSafely(
         { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'popupOpen' } },
-        { timeoutMs: 1200 }
+        { timeoutMs: 2500 }
       );
 
       if (reply?.success) return;

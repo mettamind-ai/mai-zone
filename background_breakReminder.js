@@ -14,11 +14,18 @@ import { messageActions } from './actions.js';
 const BREAK_REMINDER_END_ALARM = 'maizone_breakReminderEnd';
 const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
 const BADGE_TICK_INTERVAL_MS = 1000;
+const OPERA_BADGE_PORT_NAME = 'maizoneBreakReminderBadgeTicker';
+const OPERA_BADGE_PORT_TICK_INTERVAL_MS = 1000;
+const OPERA_SW_BADGE_TICK_INTERVAL_MS = 1000;
 
 // Runtime flag (best-effort): when true, badge is expected to be updated by offscreen.
 let hasOffscreenBadgeTicker = false;
 
 let unsubscribeStateDelta = null;
+let hasRegisteredOperaBadgePortListener = false;
+const operaBadgePorts = new Set();
+let operaBadgeTickerIntervalId = null;
+let operaSwBadgeTickTimeoutId = null;
 
 /***** OFFSCREEN (BADGE HIGH-PRECISION) *****/
 
@@ -64,6 +71,86 @@ function isTrustedUiSender(sender) {
   return senderUrl.startsWith(`chrome-extension://${chrome.runtime.id}/`);
 }
 
+/***** OPERA DETECTION (BEST-EFFORT) *****/
+
+/**
+ * Detect Opera via UA marker (best-effort).
+ * @returns {boolean}
+ */
+function isOperaBrowser() {
+  try {
+    const ua = typeof navigator?.userAgent === 'string' ? navigator.userAgent : '';
+    return /\bOPR\//.test(ua);
+  } catch {
+    return false;
+  }
+}
+
+/***** CONTENT SCRIPT INJECTION (BEST-EFFORT) *****/
+
+/**
+ * Ensure content scripts exist on at least one http/https tab (best-effort).
+ * Helps browsers that don't inject into existing tabs until reload (and enables Port-based keepalive).
+ * @returns {Promise<void>}
+ */
+async function ensureContentScriptsInjectedIntoAnyHttpTab() {
+  try {
+    if (!chrome?.tabs?.query || !chrome?.scripting?.executeScript) return;
+
+    const tryInject = async (tabId) => {
+      if (typeof tabId !== 'number') return;
+      await new Promise((resolve) => {
+        try {
+          chrome.scripting.executeScript(
+            {
+              target: { tabId },
+              files: ['actions_global.js', 'content.js']
+            },
+            () => resolve()
+          );
+        } catch {
+          resolve();
+        }
+      });
+    };
+
+    const activeTab = await new Promise((resolve) => {
+      try {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0] || null));
+      } catch {
+        resolve(null);
+      }
+    });
+
+    const activeUrl = typeof activeTab?.url === 'string' ? activeTab.url : '';
+    if (typeof activeTab?.id === 'number' && (activeUrl.startsWith('http://') || activeUrl.startsWith('https://'))) {
+      await tryInject(activeTab.id);
+      return;
+    }
+
+    const windowTabs = await new Promise((resolve) => {
+      try {
+        chrome.tabs.query({ currentWindow: true }, (tabs) => resolve(Array.isArray(tabs) ? tabs : []));
+      } catch {
+        resolve([]);
+      }
+    });
+
+    const fallback = (windowTabs || []).find((tab) => {
+      const tabId = tab?.id;
+      const url = typeof tab?.url === 'string' ? tab.url : '';
+      if (typeof tabId !== 'number') return false;
+      return url.startsWith('http://') || url.startsWith('https://');
+    });
+
+    if (typeof fallback?.id === 'number') {
+      await tryInject(fallback.id);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /***** INITIALIZATION *****/
 
 /**
@@ -73,6 +160,7 @@ function isTrustedUiSender(sender) {
 export function initBreakReminder() {
   setupMessageListeners();
   setupAlarmListeners();
+  setupOperaBadgePortListeners();
   setupInternalStateSubscription();
   ensureInitialized()
     .then(() => initializeBreakReminderIfEnabled())
@@ -189,6 +277,212 @@ function setupMessageListeners() {
   });
 }
 
+/***** OPERA PORT TICKER (BADGE) *****/
+
+/**
+ * Setup Opera-friendly badge ticker via long-lived Port.
+ * Some browsers throttle alarms; a Port can keep SW active during Deep Work.
+ * @returns {void}
+ */
+function setupOperaBadgePortListeners() {
+  if (hasRegisteredOperaBadgePortListener) return;
+  if (!chrome?.runtime?.onConnect) return;
+  hasRegisteredOperaBadgePortListener = true;
+
+  chrome.runtime.onConnect.addListener((port) => {
+    if (!port || port.name !== OPERA_BADGE_PORT_NAME) return;
+
+    operaBadgePorts.add(port);
+    console.log('🌸 Opera badge port connected. Active ports:', operaBadgePorts.size);
+
+    try {
+      port.onDisconnect.addListener(() => {
+        operaBadgePorts.delete(port);
+        console.log('🌸 Opera badge port disconnected. Active ports:', operaBadgePorts.size);
+        if (!operaBadgePorts.size) stopOperaBadgeTicker();
+      });
+    } catch {
+      // ignore
+    }
+
+    try {
+      port.onMessage.addListener((msg) => {
+        const type = typeof msg?.type === 'string' ? msg.type : '';
+        if (type === 'start' || type === 'keepalive') {
+          startOperaBadgeTicker();
+          return;
+        }
+        if (type === 'stop') {
+          operaBadgePorts.delete(port);
+          if (!operaBadgePorts.size) stopOperaBadgeTicker();
+        }
+      });
+    } catch {
+      // ignore
+    }
+
+    // Default: try to start immediately on connect.
+    startOperaBadgeTicker();
+  });
+}
+
+/**
+ * Start per-second badge ticker in SW while at least one Port is connected.
+ * @returns {void}
+ */
+function startOperaBadgeTicker() {
+  if (operaBadgeTickerIntervalId) return;
+  if (!operaBadgePorts.size) return;
+
+  console.log('🌸 Starting Opera badge ticker (SW interval).');
+  operaBadgeTickerIntervalId = setInterval(() => {
+    tickOperaBadge().catch(() => {});
+  }, OPERA_BADGE_PORT_TICK_INTERVAL_MS);
+
+  tickOperaBadge().catch(() => {});
+}
+
+/**
+ * Stop Opera badge ticker.
+ * @returns {void}
+ */
+function stopOperaBadgeTicker() {
+  if (operaBadgeTickerIntervalId) clearInterval(operaBadgeTickerIntervalId);
+  operaBadgeTickerIntervalId = null;
+  console.log('🌸 Stopped Opera badge ticker.');
+}
+
+/**
+ * Tick: update badge or end cycle if time reached.
+ * @returns {Promise<void>}
+ */
+async function tickOperaBadge() {
+  await ensureInitialized();
+
+  const {
+    breakReminderEnabled,
+    isInFlow,
+    currentTask,
+    reminderExpectedEndTime,
+    reminderStartTime,
+    reminderInterval
+  } = getState();
+
+  const isActive = !!(breakReminderEnabled && isInFlow && currentTask);
+  if (!isActive) {
+    try {
+      chrome.action?.setBadgeText({ text: '' });
+    } catch {
+      // ignore
+    }
+    stopOperaBadgeTicker();
+    return;
+  }
+
+  let expectedEndTime = null;
+  if (typeof reminderExpectedEndTime === 'number' && Number.isFinite(reminderExpectedEndTime)) {
+    expectedEndTime = reminderExpectedEndTime;
+  } else if (
+    typeof reminderStartTime === 'number' &&
+    Number.isFinite(reminderStartTime) &&
+    typeof reminderInterval === 'number' &&
+    Number.isFinite(reminderInterval)
+  ) {
+    expectedEndTime = reminderStartTime + reminderInterval;
+  }
+
+  if (typeof expectedEndTime === 'number' && Number.isFinite(expectedEndTime) && Date.now() >= expectedEndTime) {
+    await handleBreakReminderEnd();
+    stopOperaBadgeTicker();
+    return;
+  }
+
+  try {
+    updateBadgeWithTimerDisplay();
+  } catch {
+    // ignore
+  }
+}
+
+/***** OPERA SW TIMER TICKER (BADGE) *****/
+
+/**
+ * Start a SW timer loop to keep badge updating even when alarms are throttled.
+ * NOTE: This keeps the SW active while Deep Work is running; only used as fallback when offscreen isn't available.
+ * @returns {void}
+ */
+function startOperaSwBadgeTicker() {
+  if (operaSwBadgeTickTimeoutId) return;
+  if (hasOffscreenBadgeTicker) return;
+
+  console.log('🌸 Starting SW badge ticker fallback (1s).');
+
+  const tick = async () => {
+    operaSwBadgeTickTimeoutId = null;
+
+    try {
+      await ensureInitialized();
+
+      const {
+        breakReminderEnabled,
+        isInFlow,
+        currentTask,
+        reminderExpectedEndTime,
+        reminderStartTime,
+        reminderInterval
+      } = getState();
+
+      const isActive = !!(breakReminderEnabled && isInFlow && currentTask);
+      if (!isActive) {
+        stopOperaSwBadgeTicker();
+        return;
+      }
+
+      let expectedEndTime = null;
+      if (typeof reminderExpectedEndTime === 'number' && Number.isFinite(reminderExpectedEndTime)) {
+        expectedEndTime = reminderExpectedEndTime;
+      } else if (
+        typeof reminderStartTime === 'number' &&
+        Number.isFinite(reminderStartTime) &&
+        typeof reminderInterval === 'number' &&
+        Number.isFinite(reminderInterval)
+      ) {
+        expectedEndTime = reminderStartTime + reminderInterval;
+      }
+
+      if (typeof expectedEndTime === 'number' && Number.isFinite(expectedEndTime) && Date.now() >= expectedEndTime) {
+        await handleBreakReminderEnd();
+        stopOperaSwBadgeTicker();
+        return;
+      }
+
+      updateBadgeWithTimerDisplay();
+    } catch {
+      // ignore
+    } finally {
+      // Reschedule only if still active.
+      const { breakReminderEnabled, isInFlow, currentTask } = getState();
+      if (breakReminderEnabled && isInFlow && currentTask && !hasOffscreenBadgeTicker) {
+        operaSwBadgeTickTimeoutId = setTimeout(() => {
+          tick().catch(() => {});
+        }, OPERA_SW_BADGE_TICK_INTERVAL_MS);
+      }
+    }
+  };
+
+  // Kick immediately.
+  tick().catch(() => {});
+}
+
+/**
+ * Stop Opera SW timer ticker.
+ * @returns {void}
+ */
+function stopOperaSwBadgeTicker() {
+  if (operaSwBadgeTickTimeoutId) clearTimeout(operaSwBadgeTickTimeoutId);
+  operaSwBadgeTickTimeoutId = null;
+}
+
 /**
  * Handle state updates broadcasted by background_state.
  * @param {Object} updates - Partial state
@@ -256,6 +550,8 @@ async function handleAlarm(alarm) {
     // If offscreen is unavailable, keep scheduling 1-second ticks via one-shot alarms.
     // NOTE: This wakes the SW every second during Deep Work; use only as fallback.
     if (!hasOffscreenBadgeTicker) {
+      startOperaSwBadgeTicker();
+      ensureContentScriptsInjectedIntoAnyHttpTab().catch(() => {});
       scheduleNextBadgeTickAlarm();
     }
     return;
@@ -286,6 +582,8 @@ async function scheduleBreakReminderAlarms(expectedEndTime) {
     if (hasOffscreenBadgeTicker) {
       chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
     } else {
+      startOperaSwBadgeTicker();
+      ensureContentScriptsInjectedIntoAnyHttpTab().catch(() => {});
       scheduleNextBadgeTickAlarm();
     }
 
@@ -342,6 +640,22 @@ function stopBreakReminder() {
   }
 
   hasOffscreenBadgeTicker = false;
+  stopOperaSwBadgeTicker();
+  stopOperaBadgeTicker();
+
+  // Defensive: if Opera ports are still open, close them to avoid keeping SW alive.
+  try {
+    operaBadgePorts.forEach((port) => {
+      try {
+        port.disconnect();
+      } catch {
+        // ignore
+      }
+    });
+    operaBadgePorts.clear();
+  } catch {
+    // ignore
+  }
 
   try {
     chrome.action?.setBadgeText({ text: '' });

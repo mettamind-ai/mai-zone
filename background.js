@@ -127,6 +127,56 @@ async function onInstalledListener(details) {
     // Set default settings on first install
     await setupDefaultSettings();
   }
+
+  // Best-effort: inject content scripts into existing http/https tabs so features work
+  // without requiring manual reload after install/update (notably on Opera).
+  injectContentScriptsIntoExistingTabs().catch(() => {});
+}
+
+/**
+ * Inject content scripts into existing http/https tabs (best-effort).
+ * @returns {Promise<void>}
+ */
+async function injectContentScriptsIntoExistingTabs() {
+  try {
+    if (!chrome?.tabs?.query || !chrome?.scripting?.executeScript) return;
+
+    const tabs = await new Promise((resolve) => {
+      try {
+        chrome.tabs.query({}, (results) => resolve(Array.isArray(results) ? results : []));
+      } catch {
+        resolve([]);
+      }
+    });
+
+    const eligibleTabs = (tabs || []).filter((tab) => {
+      const tabId = tab?.id;
+      const url = typeof tab?.url === 'string' ? tab.url : '';
+      if (typeof tabId !== 'number') return false;
+      return url.startsWith('http://') || url.startsWith('https://');
+    });
+
+    if (!eligibleTabs.length) return;
+
+    // Run sequentially to avoid flooding the browser.
+    for (const tab of eligibleTabs) {
+      await new Promise((resolve) => {
+        try {
+          chrome.scripting.executeScript(
+            {
+              target: { tabId: tab.id },
+              files: ['actions_global.js', 'content.js']
+            },
+            () => resolve()
+          );
+        } catch {
+          resolve();
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
 }
 
 /**

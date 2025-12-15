@@ -5,6 +5,7 @@
  */
 
 import { messageActions } from './actions.js';
+import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
 import { sendMessageToTabSafely } from './messaging.js';
 
 /***** HELPERS *****/
@@ -16,6 +17,35 @@ import { sendMessageToTabSafely } from './messaging.js';
  */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Ensure main content scripts are injected into a tab (best-effort).
+ * Useful right after extension install/reload where existing tabs may not have content scripts yet.
+ * @param {number} tabId - Target tab id
+ * @returns {Promise<boolean>} True if injected (or already present)
+ */
+async function ensureContentScriptsInjected(tabId) {
+  try {
+    if (!chrome?.scripting?.executeScript) return false;
+    if (typeof tabId !== 'number') return false;
+
+    return await new Promise((resolve) => {
+      try {
+        chrome.scripting.executeScript(
+          {
+            target: { tabId },
+            files: ['actions_global.js', 'content.js']
+          },
+          () => resolve(!chrome.runtime.lastError)
+        );
+      } catch {
+        resolve(false);
+      }
+    });
+  } catch {
+    return false;
+  }
 }
 
 /***** INSPECT PICKER (CDP via chrome.debugger) *****/
@@ -31,6 +61,9 @@ const CLIPMD_HIGHLIGHT_CONFIG = Object.freeze({
 
 const clipmdSessions = new Map();
 let hasRegisteredClipmdDebuggerListeners = false;
+let hasRegisteredClipmdPopupPortListener = false;
+
+const CLIPMD_POPUP_CLOSE_CANCEL_DELAY_MS = 1200;
 
 /**
  * Send a CDP command through chrome.debugger.
@@ -110,12 +143,83 @@ async function cleanupClipmdSession(tabId) {
   clipmdSessions.delete(tabId);
 
   clearTimeout(session.timeoutId);
+  clearTimeout(session.cancelOnPopupCloseTimeoutId);
 
   try {
     await detachDebugger(session.debuggee);
   } catch {
     // ignore
   }
+}
+
+/***** POPUP CLOSE -> CANCEL (BEST-EFFORT) *****/
+
+/**
+ * If the popup closes shortly after starting ClipMD (and user didn't pick any element),
+ * cancel inspect mode to avoid leaving "is debugging this tab" running.
+ * @param {number} tabId - Target tab id
+ * @returns {void}
+ */
+function scheduleCancelClipmdFromPopupClose(tabId) {
+  const session = clipmdSessions.get(tabId);
+  if (!session) return;
+  if (session.source !== 'popupOpen') return;
+
+  clearTimeout(session.cancelOnPopupCloseTimeoutId);
+  session.cancelOnPopupCloseTimeoutId = setTimeout(() => {
+    const current = clipmdSessions.get(tabId);
+    if (!current) return;
+    if (current.source !== 'popupOpen') return;
+    if (current.didInspectRequest) return;
+    cleanupClipmdSession(tabId).catch(() => {});
+  }, CLIPMD_POPUP_CLOSE_CANCEL_DELAY_MS);
+}
+
+/**
+ * Setup a popup lifecycle Port listener so we can detect "popup closed" reliably.
+ * @returns {void}
+ */
+function setupClipmdPopupPortListeners() {
+  if (hasRegisteredClipmdPopupPortListener) return;
+  if (!chrome?.runtime?.onConnect) return;
+  hasRegisteredClipmdPopupPortListener = true;
+
+  chrome.runtime.onConnect.addListener((port) => {
+    if (!port || port.name !== CLIPMD_POPUP_PORT_NAME) return;
+
+    let tabId = null;
+
+    try {
+      port.onMessage.addListener((msg) => {
+        const nextTabId = msg?.tabId;
+        if (typeof nextTabId === 'number') tabId = nextTabId;
+      });
+    } catch {
+      // ignore
+    }
+
+    try {
+      port.onDisconnect.addListener(() => {
+        if (typeof tabId === 'number') {
+          scheduleCancelClipmdFromPopupClose(tabId);
+          return;
+        }
+
+        // Fallback: popup can close very fast; best-effort guess by current active tab.
+        try {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const activeTabId = tabs?.[0]?.id;
+            if (typeof activeTabId !== 'number') return;
+            scheduleCancelClipmdFromPopupClose(activeTabId);
+          });
+        } catch {
+          // ignore
+        }
+      });
+    } catch {
+      // ignore
+    }
+  });
 }
 
 /**
@@ -210,9 +314,10 @@ async function convertHtmlToMarkdown(html) {
 /**
  * Start ClipMD pick mode using the native inspect overlay (debugger/CDP).
  * @param {number} tabId - Target tab id
+ * @param {string} source - Trigger source for session bookkeeping
  * @returns {Promise<boolean>} True if inspect mode was started
  */
-async function startClipmdMarkdownPickerViaDebugger(tabId) {
+async function startClipmdMarkdownPickerViaDebugger(tabId, source) {
   try {
     if (!chrome?.debugger?.attach || !chrome?.debugger?.sendCommand) return false;
     if (typeof tabId !== 'number') return false;
@@ -220,6 +325,8 @@ async function startClipmdMarkdownPickerViaDebugger(tabId) {
 
     const ready = await ensureClipmdOffscreen();
     if (!ready) return false;
+
+    const sourceLabel = typeof source === 'string' ? source : 'unknown';
 
     const debuggee = { tabId };
     await attachDebugger(debuggee);
@@ -231,7 +338,14 @@ async function startClipmdMarkdownPickerViaDebugger(tabId) {
       cleanupClipmdSession(tabId).catch(() => {});
     }, CLIPMD_INSPECT_TIMEOUT_MS);
 
-    clipmdSessions.set(tabId, { debuggee, mode: 'markdown', timeoutId });
+    clipmdSessions.set(tabId, {
+      debuggee,
+      mode: 'markdown',
+      timeoutId,
+      source: sourceLabel,
+      didInspectRequest: false,
+      cancelOnPopupCloseTimeoutId: null
+    });
 
     await sendDebuggerCommand(debuggee, 'Overlay.setInspectMode', {
       mode: 'searchForNode',
@@ -256,6 +370,9 @@ async function startClipmdMarkdownPickerViaContentScript(tabId, source) {
   try {
     if (typeof tabId !== 'number') return false;
 
+    // Best-effort: make sure content scripts exist on this tab (important after reload/install).
+    await ensureContentScriptsInjected(tabId);
+
     // Retry: the content script may not be ready yet (run_at=document_idle).
     const maxAttempts = 6;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -266,6 +383,7 @@ async function startClipmdMarkdownPickerViaContentScript(tabId, source) {
       );
 
       if (reply?.received) return true;
+      if (attempt === 2) await ensureContentScriptsInjected(tabId);
       await sleep(250 + attempt * 200);
     }
 
@@ -308,7 +426,7 @@ export async function startClipmdMarkdownPicker({ tabId, source = 'unknown' } = 
     if (typeof targetTabId !== 'number') return false;
     if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
 
-    const okDebugger = await startClipmdMarkdownPickerViaDebugger(targetTabId);
+    const okDebugger = await startClipmdMarkdownPickerViaDebugger(targetTabId, source);
     if (okDebugger) return true;
 
     return await startClipmdMarkdownPickerViaContentScript(targetTabId, source);
@@ -325,6 +443,8 @@ export async function startClipmdMarkdownPicker({ tabId, source = 'unknown' } = 
  * @returns {void}
  */
 export function initClipmd() {
+  setupClipmdPopupPortListeners();
+
   if (chrome?.debugger?.onEvent && !hasRegisteredClipmdDebuggerListeners) {
     hasRegisteredClipmdDebuggerListeners = true;
 
@@ -336,6 +456,11 @@ export function initClipmd() {
 
       const session = clipmdSessions.get(tabId);
       if (!session) return;
+
+      // Mark as "picked" so popup-close cancellation won't stop a real pick flow.
+      session.didInspectRequest = true;
+      clearTimeout(session.cancelOnPopupCloseTimeoutId);
+      session.cancelOnPopupCloseTimeoutId = null;
 
       (async () => {
         try {
@@ -365,6 +490,7 @@ export function initClipmd() {
       const session = clipmdSessions.get(tabId);
       if (!session) return;
       clearTimeout(session.timeoutId);
+      clearTimeout(session.cancelOnPopupCloseTimeoutId);
       clipmdSessions.delete(tabId);
     });
   }
@@ -377,8 +503,9 @@ export function initClipmd() {
         const mode = typeof message?.data?.mode === 'string' ? message.data.mode : 'markdown';
         if (mode !== 'markdown') return { success: false, error: 'Unsupported mode' };
 
+        const sourceLabel = typeof message?.data?.source === 'string' ? message.data.source : 'runtime';
         const senderTabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined;
-        const ok = await startClipmdMarkdownPicker({ tabId: senderTabId, source: 'runtime' });
+        const ok = await startClipmdMarkdownPicker({ tabId: senderTabId, source: sourceLabel });
         return { success: ok };
       })()
         .then((response) => sendResponse(response))
