@@ -8,6 +8,7 @@
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
  * @feature f08 - Mindfulness Reminders (toast)
+ * @feature f10 - Context Menu Quick Actions (toast)
  */
 
 // Content scripts can be programmatically injected multiple times (install/update, retries).
@@ -90,6 +91,7 @@ const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
   youtubeNavigation: 'youtubeNavigation',
   closeTab: 'closeTab',
   distractingWebsite: 'distractingWebsite',
+  maiToast: 'maiToast',
   mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
   clipmdConvertMarkdown: 'clipmdConvertMarkdown',
@@ -127,6 +129,10 @@ let hasRegisteredMindfulnessAudioUnlock = false;
 let youtubeObserver = null;
 let youtubeFallbackIntervalId = null;
 let lastYoutubeUrl = '';
+
+// Generic Mai toast (non-mindfulness)
+let maiToastTimeoutId = null;
+let maiToastFadeTimeoutId = null;
 
 /******************************************************************************
  * INITIALIZATION
@@ -184,6 +190,10 @@ function initialize() {
       console.log('🌸 Deep Work status changed:', changes.isInFlow.newValue);
       // Khi trạng thái flow thay đổi, kiểm tra lại URL hiện tại để áp dụng chặn trang nhắn tin (f04c)
       checkIfDistractingSite();
+    }
+
+    if (changes.distractingSites) {
+      refreshDistractionWarningAfterListChange().catch(() => {});
     }
 
     // [f03] Opera badge tick fallback: sync on any timer-related change.
@@ -843,6 +853,112 @@ function removeChatgptToast() {
 }
 
 /******************************************************************************
+ * MAI TOAST (GENERIC) [f10]
+ ******************************************************************************/
+
+const MAI_TOAST_VISIBLE_MS = 2200;
+const MAI_TOAST_FADE_MS = 320;
+
+/**
+ * Show a small Mai toast (site-agnostic, no chime).
+ * @feature f10 - Context Menu Quick Actions
+ * @param {string} text - Toast text
+ * @returns {void}
+ */
+function showMaiToast(text) {
+  const message = typeof text === 'string' ? text : '';
+  if (!message) return;
+
+  ensureMaiToastStyles();
+
+  let el = document.getElementById('mai-generic-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'mai-generic-toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+
+    Object.assign(el.style, {
+      position: 'fixed',
+      left: '50%',
+      bottom: '18px',
+      transform: 'translateX(-50%)',
+      zIndex: '99999999',
+      maxWidth: 'min(560px, 92vw)',
+      padding: '10px 12px',
+      borderRadius: '12px',
+      backgroundColor: 'rgba(0,0,0,0.86)',
+      border: '1px solid rgba(255, 143, 171, 0.55)',
+      color: 'white',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      fontSize: '13px',
+      fontWeight: '600',
+      lineHeight: '1.25',
+      boxShadow: '0 10px 24px rgba(0,0,0,0.28), 0 0 0 5px rgba(255, 143, 171, 0.06)',
+      textAlign: 'center',
+      letterSpacing: '0.1px',
+      pointerEvents: 'none',
+      opacity: '1',
+      transition: `opacity ${MAI_TOAST_FADE_MS}ms ease, transform ${MAI_TOAST_FADE_MS}ms ease`,
+      willChange: 'transform, opacity',
+      animation: 'maiGenericToastIn 220ms ease-out'
+    });
+
+    document.documentElement.appendChild(el);
+  }
+
+  el.textContent = message;
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0px)';
+
+  clearTimeout(maiToastTimeoutId);
+  clearTimeout(maiToastFadeTimeoutId);
+
+  maiToastTimeoutId = setTimeout(() => {
+    if (!el) return;
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(6px)';
+
+    maiToastFadeTimeoutId = setTimeout(() => {
+      removeMaiToast();
+    }, MAI_TOAST_FADE_MS + 60);
+  }, MAI_TOAST_VISIBLE_MS);
+}
+
+/**
+ * Ensure CSS keyframes for generic toast exist.
+ * @feature f10 - Context Menu Quick Actions
+ * @returns {void}
+ */
+function ensureMaiToastStyles() {
+  const id = 'mai-generic-toast-styles';
+  if (document.getElementById(id)) return;
+
+  const style = document.createElement('style');
+  style.id = id;
+  style.textContent = `
+    @keyframes maiGenericToastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0px); }
+    }
+  `;
+  document.documentElement.appendChild(style);
+}
+
+/**
+ * Remove generic toast (if any).
+ * @feature f10 - Context Menu Quick Actions
+ * @returns {void}
+ */
+function removeMaiToast() {
+  clearTimeout(maiToastTimeoutId);
+  clearTimeout(maiToastFadeTimeoutId);
+  maiToastTimeoutId = null;
+  maiToastFadeTimeoutId = null;
+  document.getElementById('mai-generic-toast')?.remove?.();
+}
+
+/******************************************************************************
  * MINDFULNESS TOAST [f08]
  ******************************************************************************/
 
@@ -1181,6 +1297,13 @@ function setCurrentElement(element) {
  * Handle messages from background script
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
+  if (message?.action === messageActions.maiToast) {
+    const text = typeof message?.data?.text === 'string' ? message.data.text : '';
+    showMaiToast(text);
+    sendResponse?.({ ok: true });
+    return true;
+  }
+
   if (message?.action === messageActions.mindfulnessToast) {
     const text = typeof message?.data?.text === 'string' ? message.data.text : '';
     showMindfulnessToast(text);
@@ -1570,6 +1693,34 @@ function checkIfDistractingSite() {
     });
   } catch (error) {
     console.error('🌸🌸🌸 Error in checkIfDistractingSite:', error);
+  }
+}
+
+/**
+ * Re-check current URL when the block list changes (and remove warning if no longer distracting).
+ * @feature f10 - Context Menu Quick Actions
+ * @returns {Promise<void>}
+ */
+async function refreshDistractionWarningAfterListChange() {
+  try {
+    if (!isDistractionBlockingEnabled) return;
+
+    const currentUrl = window.location.href;
+    if (!currentUrl || currentUrl === 'about:blank') return;
+
+    const reply = await sendMessageSafely(
+      {
+        action: messageActions.checkCurrentUrl,
+        data: { url: currentUrl }
+      },
+      { timeoutMs: 1200 }
+    );
+
+    if (reply && reply.received && reply.isDistracting === false) {
+      document.getElementById('mai-distraction-warning')?.remove?.();
+    }
+  } catch {
+    // ignore
   }
 }
 

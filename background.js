@@ -8,6 +8,7 @@
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f08 - Mindfulness Reminders
  * @feature f09 - Onboarding
+ * @feature f10 - Context Menu Quick Actions
  */
 
 import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
@@ -15,6 +16,7 @@ import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
 import { initMindfulnessReminder, sendMindfulnessToast } from './background_mindfulnessReminder.js';
 import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
+import { initContextMenus } from './background_contextMenus.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
@@ -47,6 +49,7 @@ function initBackgroundScript() {
     initBreakReminder();
     initMindfulnessReminder();
     initClipmd();
+    initContextMenus();
     
     // Set up event listeners
     setupEventListeners();
