@@ -15,6 +15,7 @@ export const DEFAULT_STATE = Object.freeze({
   blockDistractions: true,
   breakReminderEnabled: false,
   mindfulnessReminderEnabled: false,
+  hasSeenOnboarding: false,
   distractingSites: Object.freeze([...DEFAULT_DISTRACTING_SITES]),
   deepWorkBlockedSites: Object.freeze([...DEFAULT_DEEPWORK_BLOCKED_SITES]),
   reminderStartTime: null,
@@ -209,6 +210,7 @@ export function sanitizeStoredState(storedState) {
     blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
     breakReminderEnabled: normalizeBoolean(stored.breakReminderEnabled, base.breakReminderEnabled),
     mindfulnessReminderEnabled: normalizeBoolean(stored.mindfulnessReminderEnabled, base.mindfulnessReminderEnabled),
+    hasSeenOnboarding: normalizeBoolean(stored.hasSeenOnboarding, base.hasSeenOnboarding),
     distractingSites: normalizeDomainList(stored.distractingSites, base.distractingSites, { maxItems: MAX_SITE_LIST_ITEMS }),
     deepWorkBlockedSites: normalizeDomainList(stored.deepWorkBlockedSites, base.deepWorkBlockedSites, {
       maxItems: MAX_SITE_LIST_ITEMS
@@ -247,6 +249,9 @@ export function computeNextState(currentState, updates) {
       updates.mindfulnessReminderEnabled,
       current.mindfulnessReminderEnabled
     );
+  }
+  if ('hasSeenOnboarding' in updates) {
+    sanitized.hasSeenOnboarding = normalizeBoolean(updates.hasSeenOnboarding, current.hasSeenOnboarding);
   }
   if ('distractingSites' in updates) {
     sanitized.distractingSites = normalizeDomainList(updates.distractingSites, current.distractingSites, {

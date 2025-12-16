@@ -56,6 +56,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |<!--r6 c1-->f06|<!--r6 c2-->ClipMD                  |<!--r6 c3-->Copy Markdown bằng cách chọn element trên trang |<!--r6 c4-->`background_clipmd.js`, `clipmd_offscreen.js`, `clipmd_offscreen.html`, `turndown.js`, `content.js`, `popup.js` |<!--r6 c5-->`startClipmdMarkdownPicker()`, `startClipmdPickMode()` | **Alt + Q**, **Click icon Mai** |<!--r6 c7-->🧪 Alpha |
 |<!--r7 c1-->f07|<!--r7 c2-->ChatGPT Zen Hotkeys     |<!--r7 c3-->Ẩn/hiện UI + dán prompt mẫu trên chatgpt.com    |<!--r7 c4-->`content.js`   |<!--r7 c5-->`handleChatgptHotkeys()`, `toggleChatgptZenMode()` | **Alt + Z**, **Alt + S** |<!--r7 c7-->🧪 Alpha |
 |<!--r8 c1-->f08|<!--r8 c2-->Mindfulness Reminders   |<!--r8 c3-->Toast nhắc thở/giãn cơ mỗi 15' (skip khi Deep Work) |<!--r8 c4-->`background_mindfulnessReminder.js`, `content.js`, `popup.js`, `constants.js`, `state_core.js`, `state_contract.js`, `actions.js`, `actions_global.js` |<!--r8 c5-->`initMindfulnessReminder()`, `showMindfulnessToast()` | **Popup toggle**, **Alt + A** |<!--r8 c7-->🧪 Alpha |
+|<!--r9 c1-->f09|<!--r9 c2-->Onboarding             |<!--r9 c3-->Hướng dẫn nhanh 3 cards (install) để user không bị choáng |<!--r9 c4-->`onboarding.html`, `onboarding.js`, `background.js`, `popup.js`, `state_core.js`, `state_contract.js` |<!--r9 c5-->`openOnboardingIfNeeded()`, `initOnboarding()` | **Install auto-open**, **Popup ❔** |<!--r9 c7-->🧪 Alpha |
 
 **Note**:
 - ở mỗi ô của bảng dùng HTML comment `<!--ri cj-->` để đánh dấu vị trí `hàng i, cột j` của ô bảng, nó invisible khi render và giúp LLM hiểu rõ vị trí bảng tốt hơn (cách làm này giống json format `{"field_name" : field_value }` ~= `|<!--ri cj-->cell_value|`).
@@ -88,3 +89,5 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 - [x] `f08` Mindfulness Reminders - mỗi 15 phút hiển thị toast (skip khi Deep Work):
   - [x] Những câu quote ngắn gọn gợi lên sự vui vẻ và tâm từ
   - [x] Nhắc nhở tập thể dục và giãn cơ định kỳ
+
+- [x] `f09` Onboarding - 3 cards hướng dẫn nhẹ nhàng cho user mới (auto-open khi cài, có nút ❔ để mở lại)

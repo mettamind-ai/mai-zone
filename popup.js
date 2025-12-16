@@ -20,6 +20,7 @@ import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
 const blockDistractionsToggle = document.getElementById('block-distractions-toggle'); // Toggle chặn trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
 const mindfulnessReminderToggle = document.getElementById('mindfulness-reminder-toggle'); // Toggle nhắc nhở mindfulness
+const helpButton = document.getElementById('help-button');                               // Nút mở hướng dẫn nhanh
 const settingsButton = document.getElementById('settings-button');                 // Nút mở trang cài đặt
 const statusText = document.getElementById('status-text');                         // Hiển thị trạng thái hiện tại
 const breakReminderCountdown = document.getElementById('break-reminder-countdown'); // Hiển thị thời gian còn lại
@@ -49,6 +50,7 @@ function initializePopup() {
   blockDistractionsToggle.addEventListener('change', () => handleToggle('blockDistractions'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
   mindfulnessReminderToggle.addEventListener('change', () => handleToggle('mindfulnessReminderEnabled'));
+  helpButton?.addEventListener('click', openOnboarding);
   settingsButton.addEventListener('click', openSettings);
   
   // Event listener cho task input - Deep Work Flow với phím Enter
@@ -303,6 +305,24 @@ function handleToggle(settingKey) {
  */
 function openSettings() {
   chrome.runtime.openOptionsPage();
+}
+
+/******************************************************************************
+ * ONBOARDING [f09]
+ ******************************************************************************/
+
+/**
+ * Open onboarding quick start page.
+ * @feature f09 - Onboarding
+ * @returns {void}
+ */
+function openOnboarding() {
+  try {
+    const url = chrome.runtime.getURL('onboarding.html');
+    chrome.tabs.create({ url });
+  } catch {
+    // ignore
+  }
 }
 
 /******************************************************************************

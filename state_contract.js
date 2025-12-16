@@ -18,6 +18,7 @@ export const UI_ALLOWED_UPDATE_KEYS = Object.freeze([
   'blockDistractions',
   'breakReminderEnabled',
   'mindfulnessReminderEnabled',
+  'hasSeenOnboarding',
   'currentTask',
   'isInFlow',
   'distractingSites',

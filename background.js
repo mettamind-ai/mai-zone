@@ -7,6 +7,7 @@
  * @feature f05 - State Management
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f08 - Mindfulness Reminders
+ * @feature f09 - Onboarding
  */
 
 import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
@@ -144,11 +145,31 @@ async function onInstalledListener(details) {
   if (details.reason === 'install') {
     // Set default settings on first install
     await setupDefaultSettings();
+
+    // Show gentle onboarding once on first install.
+    openOnboardingIfNeeded().catch(() => {});
   }
 
   // Best-effort: inject content scripts into existing http/https tabs so features work
   // without requiring manual reload after install/update (notably on Opera).
   injectContentScriptsIntoExistingTabs().catch(() => {});
+}
+
+/**
+ * Open onboarding tab on first install (best-effort, non-blocking).
+ * @feature f09 - Onboarding
+ * @returns {Promise<void>}
+ */
+async function openOnboardingIfNeeded() {
+  try {
+    const state = await ensureInitialized();
+    if (state?.hasSeenOnboarding) return;
+
+    const url = chrome.runtime.getURL('onboarding.html');
+    chrome.tabs.create({ url });
+  } catch {
+    // ignore
+  }
 }
 
 /**
