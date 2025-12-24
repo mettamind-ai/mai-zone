@@ -17,6 +17,8 @@ globalThis.MAIZONE_ACTIONS = Object.freeze({
   resetBreakReminder: 'resetBreakReminder',
   getBreakReminderState: 'getBreakReminderState',
   breakReminderBadgeTick: 'breakReminderBadgeTick',
+  triggerMindfulnessToast: 'triggerMindfulnessToast',
+  triggerBreakReminder: 'triggerBreakReminder',
   intentGateAllowAccess: 'intentGateAllowAccess',
   intentGateGetReasonLog: 'intentGateGetReasonLog',
   getState: 'getState',

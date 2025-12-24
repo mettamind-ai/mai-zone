@@ -433,6 +433,8 @@ function handleTypingEvent(event) {
  * Handle keydown events
  */
 function handleKeyDown(event) {
+  if (handleBreakReminderHotkey(event)) return;
+  if (handleMindfulnessHotkey(event)) return;
   if (handleChatgptHotkeys(event)) return;
   if (handleClipmdHotkey(event)) return;
   handleTypingEvent(event);
@@ -478,6 +480,54 @@ function handleClipmdHotkey(event) {
     startClipmdPickMode();
   })();
 
+  return true;
+}
+
+/******************************************************************************
+ * MINDFULNESS / BREAK HOTKEY FALLBACK [f08] [f03]
+ ******************************************************************************/
+
+/**
+ * Fallback hotkey handler for mindfulness toast (Alt+A).
+ * @feature f08 - Mindfulness Reminders
+ * @param {KeyboardEvent} event - Keyboard event
+ * @returns {boolean} True if handled
+ */
+function handleMindfulnessHotkey(event) {
+  if (!event?.isTrusted) return false;
+  if (!event.altKey || event.ctrlKey || event.metaKey) return false;
+  if (event.shiftKey) return false;
+  if (event.repeat) return false;
+
+  const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+  if (key !== 'a') return false;
+
+  event.preventDefault?.();
+  event.stopPropagation?.();
+
+  sendMessageSafely({ action: messageActions.triggerMindfulnessToast }, { timeoutMs: 4000 }).catch(() => {});
+  return true;
+}
+
+/**
+ * Fallback hotkey handler for break reminder (Alt+Shift+A).
+ * @feature f03 - Break Reminder
+ * @param {KeyboardEvent} event - Keyboard event
+ * @returns {boolean} True if handled
+ */
+function handleBreakReminderHotkey(event) {
+  if (!event?.isTrusted) return false;
+  if (!event.altKey || event.ctrlKey || event.metaKey) return false;
+  if (!event.shiftKey) return false;
+  if (event.repeat) return false;
+
+  const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+  if (key !== 'a') return false;
+
+  event.preventDefault?.();
+  event.stopPropagation?.();
+
+  sendMessageSafely({ action: messageActions.triggerBreakReminder }, { timeoutMs: 2000 }).catch(() => {});
   return true;
 }
 

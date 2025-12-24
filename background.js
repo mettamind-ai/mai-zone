@@ -20,6 +20,7 @@ import { initContextMenus } from './background_contextMenus.js';
 import { initOmnibox } from './background_omnibox.js';
 import { initIntentGate } from './background_intentGate.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
+import { messageActions } from './actions.js';
 
 /**
  * Summarize state for logs (privacy-first).
@@ -77,6 +78,36 @@ function setupEventListeners() {
   
   // Handle keyboard commands
   chrome.commands.onCommand.addListener(handleCommand);
+
+  // Hotkey fallback from content scripts (Alt+A / Alt+Shift+A).
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || typeof message !== 'object' || typeof message.action !== 'string') return false;
+
+    if (message.action === messageActions.triggerMindfulnessToast) {
+      (async () => {
+        const result = await sendMindfulnessToast({ allowDuringDeepWork: true });
+        sendResponse({ ok: !!result?.ok, skipped: result?.skipped });
+      })().catch((error) => {
+        console.error('🌸🌸🌸 Error triggering mindfulness toast:', error);
+        sendResponse({ ok: false, error: 'Internal error' });
+      });
+
+      return true;
+    }
+
+    if (message.action === messageActions.triggerBreakReminder) {
+      try {
+        sendBreakReminder();
+        sendResponse({ ok: true });
+      } catch (error) {
+        console.error('🌸🌸🌸 Error triggering break reminder:', error);
+        sendResponse({ ok: false, error: 'Internal error' });
+      }
+      return true;
+    }
+
+    return false;
+  });
 }
 
 /**
