@@ -39,6 +39,7 @@ function clampPositiveInt(n) {
 async function ensureGateTab() {
   const url = chrome.runtime.getURL(EXERCISE_GATE_URL);
 
+  // First, check if we already have a valid gate tab
   try {
     if (typeof gateTabId === 'number') {
       const tab = await chrome.tabs.get(gateTabId).catch(() => null);
@@ -47,13 +48,37 @@ async function ensureGateTab() {
         if (tab.url !== url) {
           await chrome.tabs.update(gateTabId, { url });
         }
-        return;
+        return; // Already have a valid gate tab
       }
     }
   } catch {
     // ignore
   }
 
+  // Search for any existing exercise_gate.html tabs (in case gateTabId was lost after SW restart)
+  try {
+    const existingTabs = await chrome.tabs.query({ url });
+    if (existingTabs && existingTabs.length > 0) {
+      // Use the first one, close duplicates
+      const firstTab = existingTabs[0];
+      gateTabId = firstTab.id;
+      gateWindowId = typeof firstTab.windowId === 'number' ? firstTab.windowId : null;
+
+      // Close any duplicate tabs
+      for (let i = 1; i < existingTabs.length; i++) {
+        try {
+          await chrome.tabs.remove(existingTabs[i].id);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  // No existing tab found, create a new one
   try {
     const tab = await chrome.tabs.create({ url, active: true });
     if (typeof tab?.id === 'number') {
