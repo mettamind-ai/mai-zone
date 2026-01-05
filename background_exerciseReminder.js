@@ -115,6 +115,12 @@ export async function triggerExerciseGateNow() {
   if (!s.exerciseReminderEnabled) return false;
   if (s.isInFlow) return false;
 
+  // Already active: just focus existing tab
+  if (gateActive) {
+    await focusGateTab();
+    return true;
+  }
+
   gateActive = true;
   await ensureGateTab();
   await focusGateTab();
@@ -126,6 +132,12 @@ async function startGateIfNeeded() {
 
   if (!s.exerciseReminderEnabled) return;
   if (s.isInFlow) return;
+
+  // Already active: just focus existing tab
+  if (gateActive) {
+    await focusGateTab();
+    return;
+  }
 
   gateActive = true;
   await ensureGateTab();
