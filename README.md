@@ -1,6 +1,6 @@
-|Cài đặt|giao diện|
-|-|-|
-|<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />|<img width="2261" height="1653" alt="image" src="https://github.com/user-attachments/assets/469f4f7b-e7c7-413b-9438-01ef11fd8930" />|
+|Cài đặt|giao diện|thi đua|
+|-|-|-|
+|<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />|<img width="2261" height="1653" alt="image" src="https://github.com/user-attachments/assets/469f4f7b-e7c7-413b-9438-01ef11fd8930" />|<img width="1845" height="1422" alt="image" src="https://github.com/user-attachments/assets/cbf21cba-c68b-4c5d-b6d3-50a4f23ff56f" />|
 
 ---
 
