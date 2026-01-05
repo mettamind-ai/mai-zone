@@ -113,6 +113,7 @@ function summarizeStateForLog(s) {
     intentGateEnabled: !!stateObj.intentGateEnabled,
     isInFlow: !!stateObj.isInFlow,
     breakReminderEnabled: !!stateObj.breakReminderEnabled,
+    exerciseReminderEnabled: !!stateObj.exerciseReminderEnabled,
     distractingSitesCount: Array.isArray(stateObj.distractingSites) ? stateObj.distractingSites.length : 0,
     deepWorkBlockedSitesCount: Array.isArray(stateObj.deepWorkBlockedSites) ? stateObj.deepWorkBlockedSites.length : 0,
     hasTask: !!(stateObj.currentTask && String(stateObj.currentTask).trim())

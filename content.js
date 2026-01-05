@@ -510,8 +510,8 @@ function handleMindfulnessHotkey(event) {
 }
 
 /**
- * Fallback hotkey handler for break reminder (Alt+Shift+A).
- * @feature f03 - Break Reminder
+ * Fallback hotkey handler for exercise reminder (Alt+Shift+A).
+ * @feature f14 - Exercise Reminder
  * @param {KeyboardEvent} event - Keyboard event
  * @returns {boolean} True if handled
  */
@@ -527,7 +527,7 @@ function handleBreakReminderHotkey(event) {
   event.preventDefault?.();
   event.stopPropagation?.();
 
-  sendMessageSafely({ action: messageActions.triggerBreakReminder }, { timeoutMs: 2000 }).catch(() => {});
+  sendMessageSafely({ action: messageActions.triggerExerciseReminder }, { timeoutMs: 2000 }).catch(() => {});
   return true;
 }
 

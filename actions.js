@@ -18,8 +18,13 @@ export const messageActions = Object.freeze({
   breakReminderBadgeTick: 'breakReminderBadgeTick',
   triggerMindfulnessToast: 'triggerMindfulnessToast',
   triggerBreakReminder: 'triggerBreakReminder',
+  triggerExerciseReminder: 'triggerExerciseReminder',
   intentGateAllowAccess: 'intentGateAllowAccess',
   intentGateGetReasonLog: 'intentGateGetReasonLog',
+
+  exerciseGetState: 'exerciseGetState',
+  exerciseSubmit: 'exerciseSubmit',
+
   getState: 'getState',
   updateState: 'updateState',
   stateUpdated: 'stateUpdated'

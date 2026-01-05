@@ -14,6 +14,7 @@
 
 import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
+import { initExerciseReminder, triggerExerciseGateNow } from './background_exerciseReminder.js';
 import { initMindfulnessReminder, sendMindfulnessToast } from './background_mindfulnessReminder.js';
 import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
 import { initContextMenus } from './background_contextMenus.js';
@@ -50,6 +51,7 @@ function initBackgroundScript() {
     // Initialize feature modules
     initIntentGate();
     initBreakReminder();
+    initExerciseReminder();
     initMindfulnessReminder();
     initClipmd();
     initContextMenus();
@@ -106,6 +108,21 @@ function setupEventListeners() {
       return true;
     }
 
+    if (message.action === messageActions.triggerExerciseReminder) {
+      (async () => {
+        try {
+          await ensureInitialized();
+          const ok = await triggerExerciseGateNow();
+          sendResponse({ ok: !!ok });
+        } catch (error) {
+          console.error('🌸🌸🌸 Error triggering exercise gate:', error);
+          sendResponse({ ok: false, error: 'Internal error' });
+        }
+      })();
+
+      return true;
+    }
+
     return false;
   });
 }
@@ -157,6 +174,31 @@ async function handleCommand(command) {
   if (command === 'test-break-reminder') {
     sendBreakReminder();
     console.log('🌸 Break reminder sent successfully');
+    return;
+  }
+
+  // Compat: some users may already have Alt+Shift+A mapped to the old break reminder command.
+  if (command === 'triggerBreakReminder') {
+    try {
+      const ok = await triggerExerciseGateNow();
+      if (!ok) {
+        console.warn('🌸🌸🌸 Exercise gate not triggered (disabled or Deep Work active)');
+      }
+    } catch (error) {
+      console.error('🌸🌸🌸 Error triggering exercise gate:', error);
+    }
+    return;
+  }
+
+  if (command === 'test-exercise-reminder') {
+    try {
+      const ok = await triggerExerciseGateNow();
+      if (!ok) {
+        console.warn('🌸🌸🌸 Exercise gate not triggered (disabled or Deep Work active)');
+      }
+    } catch (error) {
+      console.error('🌸🌸🌸 Error triggering exercise gate:', error);
+    }
     return;
   }
 
@@ -263,6 +305,7 @@ async function setupDefaultSettings() {
     await updateState({
       intentGateEnabled: true,
       breakReminderEnabled: false,
+      exerciseReminderEnabled: true,
       distractingSites: DEFAULT_DISTRACTING_SITES,
       deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES
     });

@@ -22,7 +22,10 @@ export const UI_ALLOWED_UPDATE_KEYS = Object.freeze([
   'currentTask',
   'isInFlow',
   'distractingSites',
-  'deepWorkBlockedSites'
+  'deepWorkBlockedSites',
+
+  // Exercise reminder
+  'exerciseReminderEnabled'
 ]);
 
 // Minimal subset exposed to untrusted senders (e.g., content scripts).

@@ -21,14 +21,17 @@ import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
 const intentGateToggle = document.getElementById('intent-gate-toggle'); // Toggle hỏi lý do khi mở trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
 const mindfulnessReminderToggle = document.getElementById('mindfulness-reminder-toggle'); // Toggle nhắc nhở mindfulness
+const exerciseReminderToggle = document.getElementById('exercise-reminder-toggle'); // Toggle nhắc tập thể dục
 const helpButton = document.getElementById('help-button');                               // Nút mở hướng dẫn nhanh
 const settingsButton = document.getElementById('settings-button');                 // Nút mở trang cài đặt
 const statusText = document.getElementById('status-text');                         // Hiển thị trạng thái hiện tại
 const breakReminderCountdown = document.getElementById('break-reminder-countdown'); // Hiển thị thời gian còn lại
+const exerciseReminderCountdown = document.getElementById('exercise-reminder-countdown'); // Hiển thị thời gian còn lại (tập thể dục)
 const taskInput = document.getElementById('task-input');  // Input field để nhập task cần tập trung
 
 // Biến toàn cục quản lý trạng thái
 let countdownInterval = null; // Interval cho đồng hồ đếm ngược
+let exerciseCountdownInterval = null; // Interval cho đồng hồ đếm ngược (tập thể dục)
 let clipmdPopupPort = null;
 
 /******************************************************************************
@@ -51,6 +54,7 @@ function initializePopup() {
   intentGateToggle?.addEventListener('change', () => handleToggle('intentGateEnabled'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
   mindfulnessReminderToggle.addEventListener('change', () => handleToggle('mindfulnessReminderEnabled'));
+  exerciseReminderToggle.addEventListener('change', () => handleToggle('exerciseReminderEnabled'));
   helpButton?.addEventListener('click', openOnboarding);
   settingsButton.addEventListener('click', openSettings);
   
@@ -63,6 +67,7 @@ function initializePopup() {
 
   // Khởi động đồng hồ đếm ngược
   startCountdownTimer();
+  startExerciseCountdownTimer();
   
   // Listen for state updates from background script
   chrome.runtime.onMessage.addListener((message) => {
@@ -176,6 +181,7 @@ function loadState() {
     intentGateEnabled: true,
     breakReminderEnabled: false,
     mindfulnessReminderEnabled: false,
+    exerciseReminderEnabled: true,
     isInFlow: false,
     currentTask: ''
   };
@@ -196,6 +202,7 @@ function updateUI(state) {
   if (intentGateToggle) intentGateToggle.checked = !!state.intentGateEnabled;
   breakReminderToggle.checked = state.breakReminderEnabled;
   mindfulnessReminderToggle.checked = state.mindfulnessReminderEnabled;
+  if (exerciseReminderToggle) exerciseReminderToggle.checked = !!state.exerciseReminderEnabled;
   
   // Update task input
   taskInput.value = state.currentTask || '';
@@ -220,6 +227,10 @@ function handleStateUpdate(updates) {
 
   if ('mindfulnessReminderEnabled' in updates) {
     mindfulnessReminderToggle.checked = updates.mindfulnessReminderEnabled;
+  }
+
+  if ('exerciseReminderEnabled' in updates && exerciseReminderToggle) {
+    exerciseReminderToggle.checked = !!updates.exerciseReminderEnabled;
   }
   
   if ('isInFlow' in updates) {
@@ -249,7 +260,8 @@ function handleToggle(settingKey) {
   const toggleMap = {
     'intentGateEnabled': intentGateToggle,
     'breakReminderEnabled': breakReminderToggle,
-    'mindfulnessReminderEnabled': mindfulnessReminderToggle
+    'mindfulnessReminderEnabled': mindfulnessReminderToggle,
+    'exerciseReminderEnabled': exerciseReminderToggle
   };
   
   const toggle = toggleMap[settingKey];
@@ -403,11 +415,11 @@ function updateCountdownTimer() {
         }
         return;
       }
-      
+
       const now = Date.now();
       const elapsed = now - state.startTime;
       const remaining = state.interval - elapsed;
-      
+
       if (remaining <= 0) {
         breakReminderCountdown.textContent = '(00:00)';
         try {
@@ -417,10 +429,10 @@ function updateCountdownTimer() {
         }
         return;
       }
-      
+
       const minutes = Math.floor(remaining / 60000).toString().padStart(2, '0');
       const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
-      
+
       const text = `${minutes}:${seconds}`;
       breakReminderCountdown.textContent = `(${text})`;
 
@@ -434,6 +446,59 @@ function updateCountdownTimer() {
     .catch(error => {
       console.error('🌸🌸🌸 Error updating countdown:', error);
       breakReminderCountdown.textContent = '(40:00)';
+    });
+}
+
+/**
+ * Start countdown timer for exercise reminder
+ */
+function startExerciseCountdownTimer() {
+  if (exerciseCountdownInterval) {
+    clearInterval(exerciseCountdownInterval);
+  }
+
+  updateExerciseCountdownTimer();
+  exerciseCountdownInterval = setInterval(updateExerciseCountdownTimer, 1000);
+}
+
+/**
+ * Update countdown timer display for exercise reminder
+ */
+function updateExerciseCountdownTimer() {
+  if (!exerciseReminderCountdown) return;
+
+  sendMessageSafely({ action: messageActions.exerciseGetState })
+    .then((state) => {
+      if (!state || !state.enabled) {
+        exerciseReminderCountdown.textContent = '(--:--)';
+        return;
+      }
+
+      if (state.paused) {
+        // Deep work pause; show remaining if known.
+        if (typeof state.remainingMs === 'number' && Number.isFinite(state.remainingMs)) {
+          const safe = Math.max(0, state.remainingMs);
+          const minutes = Math.floor(safe / 60000).toString().padStart(2, '0');
+          const seconds = Math.floor((safe % 60000) / 1000).toString().padStart(2, '0');
+          exerciseReminderCountdown.textContent = `(${minutes}:${seconds})`;
+        } else {
+          exerciseReminderCountdown.textContent = '(--:--)';
+        }
+        return;
+      }
+
+      if (typeof state.remainingMs !== 'number' || !Number.isFinite(state.remainingMs)) {
+        exerciseReminderCountdown.textContent = '(--:--)';
+        return;
+      }
+
+      const remaining = Math.max(0, state.remainingMs);
+      const minutes = Math.floor(remaining / 60000).toString().padStart(2, '0');
+      const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
+      exerciseReminderCountdown.textContent = `(${minutes}:${seconds})`;
+    })
+    .catch(() => {
+      exerciseReminderCountdown.textContent = '(--:--)';
     });
 }
 

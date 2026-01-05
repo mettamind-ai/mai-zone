@@ -21,7 +21,19 @@ export const DEFAULT_STATE = Object.freeze({
   reminderStartTime: null,
   reminderInterval: null,
   reminderExpectedEndTime: null,
-  mindfulnessLastShownAt: null
+  mindfulnessLastShownAt: null,
+
+  // Exercise reminder (paused during Deep Work)
+  exerciseReminderEnabled: true,
+  exerciseIntervalMs: null,
+  exerciseExpectedAt: null,
+  exerciseRemainingMs: null,
+
+  // Daily exercise stats (YYYY-MM-DD)
+  exerciseStatsDate: null,
+  exerciseStatsPushUps: 0,
+  exerciseStatsSitUps: 0,
+  exerciseStatsSquats: 0
 });
 
 /**
@@ -124,6 +136,8 @@ const MAX_SITE_LIST_ITEMS = 200;
 const MIN_INTERVAL_MS = 60 * 1000;
 const MAX_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+const EXERCISE_DEFAULT_INTERVAL_MS = 45 * 60 * 1000;
+
 /**
  * Chuẩn hoá interval ms (giới hạn khoảng hợp lý).
  * @param {any} value - Raw value
@@ -172,7 +186,7 @@ function enforceStateValidity(nextState) {
     sanitized.isInFlow = false;
   }
 
-  // Validity: no flow => no timer.
+  // Validity: no flow => no Deep Work timer.
   if (!sanitized.isInFlow || !sanitized.currentTask) {
     sanitized.isInFlow = false;
     sanitized.breakReminderEnabled = false;
@@ -180,6 +194,21 @@ function enforceStateValidity(nextState) {
     sanitized.reminderInterval = null;
     sanitized.reminderExpectedEndTime = null;
   }
+
+  // Exercise reminder defaults
+  if (sanitized.exerciseReminderEnabled && (sanitized.exerciseIntervalMs === null || sanitized.exerciseIntervalMs === undefined)) {
+    sanitized.exerciseIntervalMs = EXERCISE_DEFAULT_INTERVAL_MS;
+  }
+
+  // Deep Work is highest priority: pause exercise reminder while in flow.
+  if (sanitized.isInFlow) {
+    // Keep schedule fields around for resume; runtime module handles snapshotting remainingMs.
+  }
+
+  // Keep exercise stats in a sane range.
+  sanitized.exerciseStatsPushUps = Math.max(0, Number.isFinite(sanitized.exerciseStatsPushUps) ? sanitized.exerciseStatsPushUps : 0);
+  sanitized.exerciseStatsSitUps = Math.max(0, Number.isFinite(sanitized.exerciseStatsSitUps) ? sanitized.exerciseStatsSitUps : 0);
+  sanitized.exerciseStatsSquats = Math.max(0, Number.isFinite(sanitized.exerciseStatsSquats) ? sanitized.exerciseStatsSquats : 0);
 
   return sanitized;
 }
@@ -218,7 +247,17 @@ export function sanitizeStoredState(storedState) {
     reminderStartTime: normalizeNumberOrNull(stored.reminderStartTime, base.reminderStartTime),
     reminderInterval: normalizeIntervalMs(stored.reminderInterval, base.reminderInterval),
     reminderExpectedEndTime: normalizeNumberOrNull(stored.reminderExpectedEndTime, base.reminderExpectedEndTime),
-    mindfulnessLastShownAt: normalizeNumberOrNull(stored.mindfulnessLastShownAt, base.mindfulnessLastShownAt)
+    mindfulnessLastShownAt: normalizeNumberOrNull(stored.mindfulnessLastShownAt, base.mindfulnessLastShownAt),
+
+    exerciseReminderEnabled: normalizeBoolean(stored.exerciseReminderEnabled, base.exerciseReminderEnabled),
+    exerciseIntervalMs: normalizeIntervalMs(stored.exerciseIntervalMs, base.exerciseIntervalMs),
+    exerciseExpectedAt: normalizeNumberOrNull(stored.exerciseExpectedAt, base.exerciseExpectedAt),
+    exerciseRemainingMs: normalizeNumberOrNull(stored.exerciseRemainingMs, base.exerciseRemainingMs),
+
+    exerciseStatsDate: normalizeString(stored.exerciseStatsDate, base.exerciseStatsDate),
+    exerciseStatsPushUps: normalizeNumberOrNull(stored.exerciseStatsPushUps, base.exerciseStatsPushUps) ?? base.exerciseStatsPushUps,
+    exerciseStatsSitUps: normalizeNumberOrNull(stored.exerciseStatsSitUps, base.exerciseStatsSitUps) ?? base.exerciseStatsSitUps,
+    exerciseStatsSquats: normalizeNumberOrNull(stored.exerciseStatsSquats, base.exerciseStatsSquats) ?? base.exerciseStatsSquats
   };
 
   return enforceStateInvariants({ ...base, ...merged });
@@ -276,6 +315,32 @@ export function computeNextState(currentState, updates) {
 
   if ('mindfulnessLastShownAt' in updates) {
     sanitized.mindfulnessLastShownAt = normalizeNumberOrNull(updates.mindfulnessLastShownAt, current.mindfulnessLastShownAt);
+  }
+
+  if ('exerciseReminderEnabled' in updates) {
+    sanitized.exerciseReminderEnabled = normalizeBoolean(updates.exerciseReminderEnabled, current.exerciseReminderEnabled);
+  }
+  if ('exerciseIntervalMs' in updates) {
+    sanitized.exerciseIntervalMs = normalizeIntervalMs(updates.exerciseIntervalMs, current.exerciseIntervalMs);
+  }
+  if ('exerciseExpectedAt' in updates) {
+    sanitized.exerciseExpectedAt = normalizeNumberOrNull(updates.exerciseExpectedAt, current.exerciseExpectedAt);
+  }
+  if ('exerciseRemainingMs' in updates) {
+    sanitized.exerciseRemainingMs = normalizeNumberOrNull(updates.exerciseRemainingMs, current.exerciseRemainingMs);
+  }
+
+  if ('exerciseStatsDate' in updates) {
+    sanitized.exerciseStatsDate = normalizeString(updates.exerciseStatsDate, current.exerciseStatsDate);
+  }
+  if ('exerciseStatsPushUps' in updates) {
+    sanitized.exerciseStatsPushUps = normalizeNumberOrNull(updates.exerciseStatsPushUps, current.exerciseStatsPushUps) ?? current.exerciseStatsPushUps;
+  }
+  if ('exerciseStatsSitUps' in updates) {
+    sanitized.exerciseStatsSitUps = normalizeNumberOrNull(updates.exerciseStatsSitUps, current.exerciseStatsSitUps) ?? current.exerciseStatsSitUps;
+  }
+  if ('exerciseStatsSquats' in updates) {
+    sanitized.exerciseStatsSquats = normalizeNumberOrNull(updates.exerciseStatsSquats, current.exerciseStatsSquats) ?? current.exerciseStatsSquats;
   }
 
   return enforceStateInvariants({ ...current, ...sanitized });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MaiZone",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "MaiZone (🌸) - Mỗi lần làm một việc.",
   "action": {
     "default_popup": "popup.html",
@@ -15,6 +15,12 @@
     "page": "options.html",
     "open_in_tab": true
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["exercise_gate.html", "exercise_hero.jpg", "icon_pushups.jpg", "icon_situps.jpg", "icon_squats.jpg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "permissions": [
     "storage",
     "alarms",
@@ -38,11 +44,11 @@
       },
       "description": "Thử mindfulness (toast)"
     },
-    "test-break-reminder": {
+    "test-exercise-reminder": {
       "suggested_key": {
         "default": "Alt+Shift+A"
       },
-      "description": "Thử nhắc nghỉ ngơi"
+      "description": "Kích hoạt nhắc tập thể dục"
     },
     "clipmd-markdown": {
       "suggested_key": {
