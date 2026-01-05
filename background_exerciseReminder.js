@@ -191,6 +191,12 @@ async function ensureExerciseSchedule() {
     return;
   }
 
+  // Gate is active (waiting for user to complete exercise): pause timer, no new alarms.
+  if (gateActive) {
+    await chrome.alarms.clear(EXERCISE_ALARM);
+    return;
+  }
+
   // Not in flow: resume from remaining if present.
   let expectedAt = null;
   if (typeof s.exerciseRemainingMs === 'number' && Number.isFinite(s.exerciseRemainingMs)) {
