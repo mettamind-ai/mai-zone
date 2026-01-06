@@ -165,6 +165,49 @@ submitEl?.addEventListener('click', async () => {
     return;
   }
 
+  // Confetti celebration!
+  launchConfetti();
+  
   // Gate will be closed by background; keep UI calm.
   setError('');
 });
+
+function launchConfetti() {
+  const colors = ['#FFD93D', '#FF6B6B', '#FF8E53', '#4ECDC4', '#A78BFA', '#34D399'];
+  const confettiCount = 50;
+  
+  for (let i = 0; i < confettiCount; i++) {
+    const confetti = document.createElement('div');
+    confetti.style.cssText = `
+      position: fixed;
+      width: ${Math.random() * 10 + 5}px;
+      height: ${Math.random() * 10 + 5}px;
+      background: ${colors[Math.floor(Math.random() * colors.length)]};
+      left: ${Math.random() * 100}vw;
+      top: -20px;
+      border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+      pointer-events: none;
+      z-index: 9999;
+      animation: confetti-fall ${Math.random() * 2 + 2}s linear forwards;
+    `;
+    document.body.appendChild(confetti);
+    
+    setTimeout(() => confetti.remove(), 4000);
+  }
+  
+  // Add keyframes if not exists
+  if (!document.getElementById('confetti-style')) {
+    const style = document.createElement('style');
+    style.id = 'confetti-style';
+    style.textContent = `
+      @keyframes confetti-fall {
+        to {
+          top: 100vh;
+          transform: rotate(${Math.random() * 720}deg);
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
