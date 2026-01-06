@@ -27,7 +27,7 @@ const FUNNY_TITLES = [
   { title: '🪑 Ghế đang xin được nghỉ ngơi!', subtitle: 'Bạn ngồi lâu quá, ghế cũng mệt rồi!' },
   { title: '🩸 Máu đang ùn tắc như đường giờ cao điểm!', subtitle: 'Vận động để máu lưu thông trở lại!' },
   { title: '🧟 Cơ thể đang biến thành zombie văn phòng!', subtitle: 'Tập thể dục để trở lại làm người!' },
-  { title: '🦴 Các khớp đang kêu cót két như cửa ma!', subtitle: 'Bôi trơn bằng vận động ngay thôi!' },
+  { title: '🦴 Các khớp đang kêu cót két!', subtitle: 'Bôi trơn bằng vận động ngay thôi!' },
   { title: '🧊 Chân đang đông cứng như que kem!', subtitle: 'Làm tan băng bằng vài cái squat nào!' },
   { title: '🐙 Tư thế ngồi đang giống bạch tuộc!', subtitle: 'Duỗi thẳng người ra, bạn là người mà!' },
 ];
