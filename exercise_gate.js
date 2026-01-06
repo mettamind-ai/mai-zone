@@ -113,6 +113,12 @@ function normalizeNumericInput(el) {
     el.value = next.length ? String(Number(next)) : '0';
     updateRepFeedback();
   });
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitEl?.click();
+    }
+  });
 }
 
 normalizeNumericInput(pushupsEl);
@@ -152,6 +158,13 @@ submitEl?.addEventListener('click', async () => {
 
   submitEl.disabled = true;
 
+  // Confetti celebration first!
+  launchConfetti();
+  setError('');
+
+  // Delay to let user enjoy the confetti, then submit
+  await new Promise((r) => setTimeout(r, 1500));
+
   const res = await sendMessageSafely(
     { action: messageActions.exerciseSubmit, data: { pushUps, sitUps, squats } },
     { timeoutMs: 6000 }
@@ -163,11 +176,7 @@ submitEl?.addEventListener('click', async () => {
     return;
   }
 
-  // Confetti celebration!
-  launchConfetti();
-  
-  // Gate will be closed by background; keep UI calm.
-  setError('');
+  // Gate will be closed by background
 });
 
 function launchConfetti() {
