@@ -85,8 +85,8 @@ function setError(message) {
 }
 
 const REP_COMMENTS = [
-  { min: 5, messages: ['👍 Khởi động tốt!', '🌱 Bắt đầu rồi đấy!', '✨ Có tiến bộ!'] },
-  { min: 10, messages: ['🔥 Máu lên rồi!', '💪 Ngon lành!', '🎯 Chính xác!'] },
+  { min: 5, messages: ['🐣 Ít nhất cũng động đậy rồi!', '🦥 Hơn con lười một chút!', '🌱 Có còn hơn không!'] },
+  { min: 10, messages: ['🏃 Nhanh hơn wifi công ty rồi đấy!', '🐢 Vượt qua tốc độ rùa thành công!', '💺 Ghế đang ghen tị với sàn nhà!', '🦴 Xương khớp: "Cảm ơn ông chủ!"', '🧠 Não vừa được tưới oxygen!', '🔋 Pin sạc được 10%!'] },
   { min: 15, messages: ['🏆 Cơ bắp cảm ơn bạn!', '⚡ Năng lượng tràn đầy!', '🌟 Tuyệt vời!'] },
   { min: 20, messages: ['🦸 Quái vật!', '👑 Huyền thoại!', '🚀 Siêu nhân!'] },
 ];
