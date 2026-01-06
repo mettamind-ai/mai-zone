@@ -34,7 +34,6 @@ const FUNNY_TITLES = [
 
 const MOTIVATIONS = [
   '💡 Mỗi cái chống đẩy là một bước gần hơn tới body trong mơ... hoặc ít nhất là hết đau lưng!',
-  '🏋️ Arnold Schwarzenegger cũng bắt đầu từ con số 0. Nhưng ông ấy không ngồi code 8 tiếng/ngày.',
   '🧠 Nghiên cứu cho thấy: tập thể dục giúp thông minh hơn. Bugs sẽ sợ bạn!',
   '🦸 Không cần cape để làm siêu anh hùng. Chỉ cần 10 cái squat!',
   '🎮 Coi như đây là mini-game. Hoàn thành để unlock màn tiếp theo!',
