@@ -21,6 +21,7 @@ let unsubscribeStateDelta = null;
 let gateTabId = null;
 let gateWindowId = null;
 let gateActive = false;
+let gateTabMutex = null;
 
 /**
  * Check if exercise gate tab is currently open (query-based, survives SW restart)
@@ -49,7 +50,28 @@ function clampPositiveInt(n) {
   return Math.max(0, v);
 }
 
+/**
+ * Ensures exactly one gate tab exists. Uses mutex to prevent race conditions.
+ */
 async function ensureGateTab() {
+  // Mutex: wait for any in-flight ensureGateTab call to finish
+  if (gateTabMutex) {
+    await gateTabMutex;
+    return;
+  }
+
+  let resolve;
+  gateTabMutex = new Promise((r) => { resolve = r; });
+
+  try {
+    await ensureGateTabInternal();
+  } finally {
+    gateTabMutex = null;
+    resolve();
+  }
+}
+
+async function ensureGateTabInternal() {
   const url = chrome.runtime.getURL(EXERCISE_GATE_URL);
 
   // First, check if we already have a valid gate tab
@@ -103,9 +125,45 @@ async function ensureGateTab() {
   }
 }
 
+/**
+ * Recover gate state from existing tabs (survives SW restart).
+ * Sets gateActive, gateTabId, gateWindowId if gate tab exists.
+ */
+async function recoverGateState() {
+  const url = chrome.runtime.getURL(EXERCISE_GATE_URL);
+  try {
+    const tabs = await chrome.tabs.query({ url });
+    if (tabs && tabs.length > 0) {
+      gateActive = true;
+      gateTabId = tabs[0].id;
+      gateWindowId = typeof tabs[0].windowId === 'number' ? tabs[0].windowId : null;
+      // Close duplicates
+      for (let i = 1; i < tabs.length; i++) {
+        try {
+          await chrome.tabs.remove(tabs[i].id);
+        } catch {
+          // ignore
+        }
+      }
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 async function focusGateTab() {
-  if (!gateActive) return;
-  if (typeof gateTabId !== 'number') return;
+  if (!gateActive) {
+    // Try to recover state after SW restart
+    const recovered = await recoverGateState();
+    if (!recovered) return;
+  }
+  if (typeof gateTabId !== 'number') {
+    // gateActive but no tabId - recover
+    const recovered = await recoverGateState();
+    if (!recovered || typeof gateTabId !== 'number') return;
+  }
 
   try {
     if (typeof gateWindowId === 'number') {
@@ -163,8 +221,8 @@ async function startGateIfNeeded() {
 
 async function stopGate() {
   gateActive = false;
-  const oldGateTabId = gateTabId;
   gateTabId = null;
+  gateWindowId = null;
 
   try {
     await chrome.alarms.clear(EXERCISE_ALARM);
@@ -172,13 +230,19 @@ async function stopGate() {
     // ignore
   }
 
-  // Best-effort: close the gate tab after completion.
-  if (typeof oldGateTabId === 'number') {
-    try {
-      await chrome.tabs.remove(oldGateTabId);
-    } catch {
-      // ignore
+  // Close all exercise gate tabs (query-based to survive SW restart)
+  const url = chrome.runtime.getURL(EXERCISE_GATE_URL);
+  try {
+    const tabs = await chrome.tabs.query({ url });
+    for (const tab of tabs) {
+      try {
+        await chrome.tabs.remove(tab.id);
+      } catch {
+        // ignore
+      }
     }
+  } catch {
+    // ignore
   }
 }
 
@@ -401,12 +465,16 @@ function setupAlarmListener() {
 
 function setupEnforcementListeners() {
   chrome.tabs.onActivated.addListener(({ tabId }) => {
-    if (!gateActive) return;
     if (typeof tabId !== 'number') return;
-    if (tabId === gateTabId) return;
 
     ensureInitialized()
       .then(async () => {
+        // Recover gate state if needed (SW restart)
+        if (!gateActive) {
+          const recovered = await recoverGateState();
+          if (!recovered) return;
+        }
+        if (tabId === gateTabId) return;
         const s = getState();
         if (!gateActive || !s.exerciseReminderEnabled || s.isInFlow) return;
         await focusGateTab();
@@ -415,13 +483,17 @@ function setupEnforcementListeners() {
   });
 
   chrome.tabs.onCreated.addListener((tab) => {
-    if (!gateActive) return;
     const tabId = tab?.id;
     if (typeof tabId !== 'number') return;
-    if (tabId === gateTabId) return;
 
     ensureInitialized()
       .then(async () => {
+        // Recover gate state if needed (SW restart)
+        if (!gateActive) {
+          const recovered = await recoverGateState();
+          if (!recovered) return;
+        }
+        if (tabId === gateTabId) return;
         const s = getState();
         if (!gateActive || !s.exerciseReminderEnabled || s.isInFlow) return;
         await focusGateTab();
@@ -431,31 +503,52 @@ function setupEnforcementListeners() {
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     if (typeof tabId !== 'number') return;
-    if (tabId !== gateTabId) return;
-
-    // User closed the gate tab: reopen immediately.
-    if (!gateActive) return;
 
     ensureInitialized()
       .then(async () => {
-        const s = getState();
-        if (!gateActive || !s.exerciseReminderEnabled || s.isInFlow) return;
-        gateTabId = null;
-        gateWindowId = null;
-        await ensureGateTab();
-        await focusGateTab();
+        // Check if the removed tab was a gate tab
+        const url = chrome.runtime.getURL(EXERCISE_GATE_URL);
+        const remainingTabs = await chrome.tabs.query({ url }).catch(() => []);
+        
+        // If no gate tabs remain but we should have one, reopen
+        if (remainingTabs.length === 0) {
+          // Was this our gate tab or did user close it?
+          if (tabId === gateTabId || gateActive) {
+            const s = getState();
+            if (!s.exerciseReminderEnabled || s.isInFlow) {
+              gateActive = false;
+              gateTabId = null;
+              gateWindowId = null;
+              return;
+            }
+            // Reopen gate
+            gateTabId = null;
+            gateWindowId = null;
+            gateActive = true;
+            await ensureGateTab();
+            await focusGateTab();
+          }
+        } else {
+          // Update gateTabId to remaining tab
+          gateTabId = remainingTabs[0].id;
+          gateWindowId = typeof remainingTabs[0].windowId === 'number' ? remainingTabs[0].windowId : null;
+        }
       })
       .catch(() => {});
   });
 
   chrome.webNavigation.onCommitted.addListener((details) => {
-    if (!gateActive) return;
     const tabId = details?.tabId;
     if (typeof tabId !== 'number') return;
-    if (tabId === gateTabId) return;
 
     ensureInitialized()
       .then(async () => {
+        // Recover gate state if needed (SW restart)
+        if (!gateActive) {
+          const recovered = await recoverGateState();
+          if (!recovered) return;
+        }
+        if (tabId === gateTabId) return;
         const s = getState();
         if (!gateActive || !s.exerciseReminderEnabled || s.isInFlow) return;
         await focusGateTab();
