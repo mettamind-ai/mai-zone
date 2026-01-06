@@ -167,6 +167,15 @@
       text-align: center;
     }
 
+    .motivation {
+      margin-top: 14px;
+      margin-bottom: 0;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 14px;
+      text-align: center;
+      font-style: italic;
+    }
+
     .error {
       margin-top: 12px;
       color: #FF6B6B;
@@ -180,8 +189,8 @@
   <div class="card">
     <div class="hero">
       <img class="hero-img" src="exercise_hero.jpg" alt="Let's exercise!" onerror="this.style.display='none'" />
-      <h1>💪 Đến giờ tập rồi!</h1>
-      <p>Nghỉ ngơi một chút, vận động để tăng năng lượng nào!</p>
+      <h1 id="hero-title">💪 Đến giờ tập rồi!</h1>
+      <p id="hero-subtitle">Nghỉ ngơi một chút, vận động để tăng năng lượng nào!</p>
     </div>
 
     <div class="exercises">
@@ -215,6 +224,7 @@
 
     <div class="actions">
       <button id="submit">🔥 Xong · Mở khóa!</button>
+      <p class="motivation" id="motivation"></p>
     </div>
 
     <div id="error" class="error"></div>
