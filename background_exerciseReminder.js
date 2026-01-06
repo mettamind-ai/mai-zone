@@ -22,6 +22,19 @@ let gateTabId = null;
 let gateWindowId = null;
 let gateActive = false;
 
+/**
+ * Check if exercise gate tab is currently open (query-based, survives SW restart)
+ */
+async function isGateTabOpen() {
+  const url = chrome.runtime.getURL(EXERCISE_GATE_URL);
+  try {
+    const tabs = await chrome.tabs.query({ url });
+    return tabs && tabs.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function todayKey() {
   // YYYY-MM-DD in local time
   const d = new Date();
@@ -115,8 +128,10 @@ export async function triggerExerciseGateNow() {
   if (!s.exerciseReminderEnabled) return false;
   if (s.isInFlow) return false;
 
-  // Already active: just focus existing tab
-  if (gateActive) {
+  // Already active (in-memory or existing tab): just focus existing tab
+  if (gateActive || await isGateTabOpen()) {
+    gateActive = true;
+    await ensureGateTab(); // will find existing tab and set gateTabId
     await focusGateTab();
     return true;
   }
@@ -133,8 +148,10 @@ async function startGateIfNeeded() {
   if (!s.exerciseReminderEnabled) return;
   if (s.isInFlow) return;
 
-  // Already active: just focus existing tab
-  if (gateActive) {
+  // Already active (in-memory or existing tab): just focus existing tab
+  if (gateActive || await isGateTabOpen()) {
+    gateActive = true;
+    await ensureGateTab(); // will find existing tab and set gateTabId
     await focusGateTab();
     return;
   }
@@ -204,7 +221,8 @@ async function ensureExerciseSchedule() {
   }
 
   // Gate is active (waiting for user to complete exercise): pause timer, no new alarms.
-  if (gateActive) {
+  if (gateActive || await isGateTabOpen()) {
+    gateActive = true;
     await chrome.alarms.clear(EXERCISE_ALARM);
     return;
   }
