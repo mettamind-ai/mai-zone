@@ -38,7 +38,6 @@ const MOTIVATIONS = [
   '🦸 Không cần cape để làm siêu anh hùng. Chỉ cần 10 cái squat!',
   '🎮 Coi như đây là mini-game. Hoàn thành để unlock màn tiếp theo!',
   '☕ Tập xong uống cà phê ngon hơn 69%. Khoa học chứng minh. Có thể.',
-  '🐕 Chó đi dạo mỗi ngày và luôn vui vẻ. Trùng hợp? Tôi không nghĩ vậy!',
   '🌟 Cơ thể bạn là phương tiện duy nhất không thể đổi mới. Hãy bảo trì nó!',
 ];
 
