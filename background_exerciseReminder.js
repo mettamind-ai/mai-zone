@@ -196,10 +196,10 @@ async function ensureExerciseSchedule() {
 
   if (!s.exerciseReminderEnabled) {
     await chrome.alarms.clear(EXERCISE_ALARM);
+    // Keep exerciseIntervalMs so timer restarts correctly when re-enabled
     await updateState({
       exerciseExpectedAt: null,
-      exerciseRemainingMs: null,
-      exerciseIntervalMs: null
+      exerciseRemainingMs: null
     });
     return;
   }
