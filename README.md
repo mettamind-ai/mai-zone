@@ -64,8 +64,6 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 
 ## `FAT` (Features And sub-Tasks Checklist)
 
-- [x] `f00` Mai nhận diện khi text input elem được click / focus và nhận diện được sự kiện người dùng gõ phím và xác định content của ô text input đang được gõ
-
 - [x] `f01` (deprecated) Đã thay bằng cơ chế hỏi lý do (f13)
 
 - [x] `f03` Sau 40 phút Mai sẽ nhắc nhở người dùng nghỉ ngơi, thư giãn, tập thể dục tạm rời xa máy tính một chút. Hãy tạo những lời nhắc vui nhộn, nhẹ nhàng, dí dỏm, khiến user bật cười. Trong popup có dòng chữ `Nhắc nhở nghỉ ngơi (40:00)` nếu được bật thì phần đồng hồ đếm ngược `(40:00)` sẽ phản ánh số thời gian còn lại cho tới thời gian nghỉ tiếp theo (ví dụ `31:33` ... và cho tới `00:00` thì báo nghỉ và reset về `40:00`)
