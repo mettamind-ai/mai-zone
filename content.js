@@ -7,6 +7,8 @@
  * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
  * @feature f08 - Mindfulness Reminders (toast)
  * @feature f10 - Context Menu Quick Actions (toast)
+ * @feature f15 - YouTube Auto Skip Ads (youtube.com)
+ * @feature f16 - Gemini Zen Hotkeys (gemini.google.com)
  */
 
 // Content scripts can be programmatically injected multiple times (install/update, retries).
@@ -79,6 +81,17 @@ const CHATGPT_ZEN_STORAGE_KEY = 'chatgptZenMode';
 const CHATGPT_ZEN_SELECTORS = Object.freeze(['.cursor-pointer', '#page-header', '#thread-bottom', '#full_editor']);
 const CHATGPT_TEMPLATE = "You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing. You should be concise, direct, and without unnecessary explanations or summaries. Avoid giving unnecessary details or deviating from the user's request, focusing solely on the specific question at hand. Trình bày output text dưới dạng văn xuôi, dễ hiểu, ít gạch đầu dòng. Các lệnh tắt cần ghi nhớ: `vx`: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi. `vd`: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.";
 
+// [f16] Gemini Zen (default OFF): hide clutter on gemini.google.com
+const GEMINI_HOST_SUFFIX = 'gemini.google.com';
+const GEMINI_ZEN_STORAGE_KEY = 'geminiZenMode';
+const GEMINI_ZEN_SELECTORS = Object.freeze([
+  'input-container',
+  'hallucination-disclaimer',
+  'top-bar-actions',
+  'div[data-test-id="chat-app"].side-nav-menu-button',
+  'div.desktop-ogb-buffer'
+]);
+
 // [f12] arXiv Zen (default ON): hide clutter on arxiv.org/html/*
 const ARXIV_HOST = 'arxiv.org';
 const ARXIV_ZEN_STORAGE_KEY = 'arxivZenMode';
@@ -89,6 +102,14 @@ const ARXIV_ZEN_HIDE_SELECTORS = Object.freeze([
   'footer#footer',
   'nav.ltx_TOC'
 ]);
+
+// [f15] YouTube auto-skip ads.
+const YOUTUBE_HOST_SUFFIX = 'youtube.com';
+const YOUTUBE_SKIP_AD_SELECTORS = Object.freeze([
+  'button.ytp-skip-ad-button.ytp-ad-component--clickable',
+  'button.ytp-skip-ad-button'
+]);
+const YOUTUBE_SKIP_CLICK_COOLDOWN_MS = 800;
 
 // [f03] Opera badge tick fallback: keep badge updated per-second by keeping the SW active via a Port.
 const OPERA_BADGE_PORT_NAME = 'maizoneBreakReminderBadgeTicker';
@@ -124,10 +145,20 @@ let chatgptZenObserver = null;
 let chatgptZenApplyTimeoutId = null;
 let chatgptToastTimeoutId = null;
 
+// [f16] Gemini Zen state
+let isGeminiZenModeEnabled = false;
+let geminiZenObserver = null;
+let geminiZenApplyTimeoutId = null;
+
 // [f12] arXiv Zen state
 let isArxivZenModeEnabled = true; // default ON
 let arxivZenObserver = null;
 let arxivZenApplyTimeoutId = null;
+
+// [f15] YouTube auto-skip state
+let youtubeSkipObserver = null;
+let youtubeSkipApplyTimeoutId = null;
+let lastYoutubeSkipClickAt = 0;
 
 let mindfulnessToastTimeoutId = null;
 let mindfulnessToastFadeTimeoutId = null;
@@ -157,10 +188,13 @@ function initialize() {
 
   // Load settings early so we can avoid unnecessary work for disabled features
   chrome.storage.local.get(
-    [CHATGPT_ZEN_STORAGE_KEY, ARXIV_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
+    [CHATGPT_ZEN_STORAGE_KEY, GEMINI_ZEN_STORAGE_KEY, ARXIV_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
     (result) => {
       const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
       isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : false;
+
+      const rawGeminiZenMode = result?.[GEMINI_ZEN_STORAGE_KEY];
+      isGeminiZenModeEnabled = typeof rawGeminiZenMode === 'boolean' ? rawGeminiZenMode : false;
 
       // arXiv Zen defaults to true
       const rawArxivZenMode = result?.[ARXIV_ZEN_STORAGE_KEY];
@@ -180,6 +214,12 @@ function initialize() {
       const nextValue = changes[CHATGPT_ZEN_STORAGE_KEY]?.newValue;
       isChatgptZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : false;
       syncChatgptHelperActiveState();
+    }
+
+    if (changes[GEMINI_ZEN_STORAGE_KEY]) {
+      const nextValue = changes[GEMINI_ZEN_STORAGE_KEY]?.newValue;
+      isGeminiZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : false;
+      syncGeminiZenActiveState();
     }
 
     if (changes[ARXIV_ZEN_STORAGE_KEY]) {
@@ -233,7 +273,9 @@ function syncContentScriptActiveState() {
   attachDomListeners();
 
   syncChatgptHelperActiveState();
+  syncGeminiZenActiveState();
   syncArxivZenActiveState();
+  syncYoutubeSkipAdActiveState();
 }
 
 /******************************************************************************
@@ -436,6 +478,7 @@ function handleKeyDown(event) {
   if (handleBreakReminderHotkey(event)) return;
   if (handleMindfulnessHotkey(event)) return;
   if (handleChatgptHotkeys(event)) return;
+  if (handleGeminiHotkeys(event)) return;
   if (handleClipmdHotkey(event)) return;
   handleTypingEvent(event);
 }
@@ -895,6 +938,157 @@ function removeChatgptToast() {
 }
 
 /******************************************************************************
+ * GEMINI ZEN HOTKEYS (gemini.google.com) [f16]
+ ******************************************************************************/
+
+/**
+ * Check whether current page is gemini.google.com (or subdomain).
+ * @returns {boolean}
+ */
+function isGeminiHost() {
+  const host = (window.location?.hostname || '').toLowerCase();
+  return host === GEMINI_HOST_SUFFIX || host.endsWith(`.${GEMINI_HOST_SUFFIX}`);
+}
+
+/**
+ * Sync Gemini Zen effects with current enabled state.
+ * @returns {void}
+ */
+function syncGeminiZenActiveState() {
+  if (!isGeminiHost()) return;
+
+  if (isGeminiZenModeEnabled) {
+    applyGeminiZenMode(true);
+    startGeminiZenObserver();
+    return;
+  }
+
+  stopGeminiZenObserver();
+  restoreAllGeminiZenHiddenElements();
+}
+
+/**
+ * Handle Gemini-only hotkeys.
+ * - Alt+Z: toggle "Zen" (hide/show selected UI blocks)
+ * @feature f16 - Gemini Zen Hotkeys (gemini.google.com)
+ * @param {KeyboardEvent} event - Keyboard event
+ * @returns {boolean} True if handled
+ */
+function handleGeminiHotkeys(event) {
+  if (!isGeminiHost()) return false;
+  if (!event?.isTrusted) return false;
+  if (!event.altKey || event.ctrlKey || event.metaKey) return false;
+  if (event.shiftKey) return false;
+  if (event.repeat) return false;
+
+  const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+  if (key !== 'z') return false;
+
+  toggleGeminiZenMode();
+  event.preventDefault?.();
+  event.stopPropagation?.();
+  return true;
+}
+
+/**
+ * Toggle Gemini Zen mode and persist to storage.
+ * @returns {void}
+ */
+function toggleGeminiZenMode() {
+  isGeminiZenModeEnabled = !isGeminiZenModeEnabled;
+  syncGeminiZenActiveState();
+
+  try {
+    chrome.storage.local.set({ [GEMINI_ZEN_STORAGE_KEY]: isGeminiZenModeEnabled });
+  } catch {
+    // ignore (context may be invalidated)
+  }
+
+  if (isGeminiZenModeEnabled) {
+    showMaiToast('🌸 Gemini Zen mode: ON (Alt+Z để tắt)');
+  } else {
+    showMaiToast('🌸 Gemini Zen mode: OFF (Alt+Z để bật)');
+  }
+}
+
+/**
+ * Apply or restore Gemini Zen mode.
+ * @param {boolean} enable - True to hide, false to restore
+ * @returns {void}
+ */
+function applyGeminiZenMode(enable) {
+  if (!enable) {
+    restoreAllGeminiZenHiddenElements();
+    return;
+  }
+
+  GEMINI_ZEN_SELECTORS.forEach((selector) => {
+    if (typeof selector !== 'string') return;
+    const nodes = document.querySelectorAll(selector);
+    nodes.forEach((el) => hideElementForZen(el));
+  });
+}
+
+/**
+ * Restore all elements hidden by Gemini Zen mode.
+ * @returns {void}
+ */
+function restoreAllGeminiZenHiddenElements() {
+  try {
+    const hiddenEls = document.querySelectorAll('[data-maizone-zen-hidden="1"]');
+    hiddenEls.forEach((el) => restoreElementFromZen(el));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Start a lightweight observer to re-apply Zen on DOM changes.
+ * @returns {void}
+ */
+function startGeminiZenObserver() {
+  if (!isGeminiHost()) return;
+  if (!isGeminiZenModeEnabled) return;
+  if (geminiZenObserver) return;
+
+  const root = document.documentElement;
+  if (!root) return;
+
+  geminiZenObserver = new MutationObserver(() => scheduleGeminiZenApply());
+  geminiZenObserver.observe(root, { childList: true, subtree: true });
+}
+
+/**
+ * Stop Gemini Zen observer.
+ * @returns {void}
+ */
+function stopGeminiZenObserver() {
+  try {
+    geminiZenObserver?.disconnect?.();
+  } catch {
+    // ignore
+  }
+  geminiZenObserver = null;
+  clearTimeout(geminiZenApplyTimeoutId);
+  geminiZenApplyTimeoutId = null;
+}
+
+/**
+ * Debounce Gemini Zen re-apply to keep overhead low.
+ * @returns {void}
+ */
+function scheduleGeminiZenApply() {
+  if (!isGeminiHost()) return;
+  if (!isGeminiZenModeEnabled) return;
+  if (geminiZenApplyTimeoutId) return;
+
+  geminiZenApplyTimeoutId = setTimeout(() => {
+    geminiZenApplyTimeoutId = null;
+    applyGeminiZenMode(true);
+  }, 180);
+}
+
+/******************************************************************************
  * ARXIV ZEN MODE [f12]
  ******************************************************************************/
 
@@ -1088,6 +1282,120 @@ function scheduleArxivZenApply() {
     arxivZenApplyTimeoutId = null;
     applyArxivZenMode(true);
   }, 180);
+}
+
+/******************************************************************************
+ * YOUTUBE AUTO SKIP ADS [f15]
+ ******************************************************************************/
+
+/**
+ * Check whether current page is youtube.com (or subdomain).
+ * @returns {boolean}
+ */
+function isYoutubeHost() {
+  const host = (window.location?.hostname || '').toLowerCase();
+  return host === YOUTUBE_HOST_SUFFIX || host.endsWith(`.${YOUTUBE_HOST_SUFFIX}`);
+}
+
+/**
+ * Sync YouTube auto-skip behavior.
+ * @returns {void}
+ */
+function syncYoutubeSkipAdActiveState() {
+  if (!isYoutubeHost()) return;
+  startYoutubeSkipObserver();
+  scheduleYoutubeSkipCheck();
+}
+
+/**
+ * Start observer to detect skip button render.
+ * @returns {void}
+ */
+function startYoutubeSkipObserver() {
+  if (!isYoutubeHost()) return;
+  if (youtubeSkipObserver) return;
+
+  const root = document.documentElement;
+  if (!root) return;
+
+  youtubeSkipObserver = new MutationObserver(() => scheduleYoutubeSkipCheck());
+  youtubeSkipObserver.observe(root, { childList: true, subtree: true });
+}
+
+/**
+ * Debounce skip button checks to reduce overhead.
+ * @returns {void}
+ */
+function scheduleYoutubeSkipCheck() {
+  if (!isYoutubeHost()) return;
+  if (youtubeSkipApplyTimeoutId) return;
+
+  youtubeSkipApplyTimeoutId = setTimeout(() => {
+    youtubeSkipApplyTimeoutId = null;
+    tryClickYoutubeSkipAdButton();
+  }, 120);
+}
+
+/**
+ * Find and click YouTube skip ad button if available.
+ * @returns {void}
+ */
+function tryClickYoutubeSkipAdButton() {
+  if (!isYoutubeHost()) return;
+
+  const now = Date.now();
+  if (now - lastYoutubeSkipClickAt < YOUTUBE_SKIP_CLICK_COOLDOWN_MS) return;
+
+  const button = findYoutubeSkipAdButton();
+  if (!button) return;
+  if (button.disabled) return;
+  if (!isElementVisible(button)) return;
+
+  try {
+    button.click();
+    lastYoutubeSkipClickAt = now;
+    console.log('🌸 YouTube auto-skip: clicked Skip Ad button');
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Locate the first visible YouTube skip ad button.
+ * @returns {HTMLButtonElement|null}
+ */
+function findYoutubeSkipAdButton() {
+  for (const selector of YOUTUBE_SKIP_AD_SELECTORS) {
+    const nodes = document.querySelectorAll(selector);
+    for (const node of nodes) {
+      if (!(node instanceof HTMLButtonElement)) continue;
+      if (!isElementVisible(node)) continue;
+      return node;
+    }
+  }
+  return null;
+}
+
+/**
+ * Basic visibility check for clickable elements.
+ * @param {HTMLElement} el
+ * @returns {boolean}
+ */
+function isElementVisible(el) {
+  if (!el) return false;
+  if (typeof el.getBoundingClientRect !== 'function') return false;
+
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+
+  try {
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+  } catch {
+    // ignore
+  }
+
+  return true;
 }
 
 /******************************************************************************
