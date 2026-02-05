@@ -178,6 +178,9 @@ function normalizeTask(value, fallback) {
 function enforceStateValidity(nextState) {
   const sanitized = { ...nextState };
 
+  // Intent gate is always on.
+  sanitized.intentGateEnabled = true;
+
   // Ensure task is always a string.
   if (!sanitized.currentTask) sanitized.currentTask = '';
 
@@ -236,7 +239,7 @@ export function sanitizeStoredState(storedState) {
   const merged = {
     currentTask: normalizeTask(stored.currentTask, base.currentTask),
     isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
-    intentGateEnabled: normalizeBoolean(stored.intentGateEnabled, base.intentGateEnabled),
+    intentGateEnabled: true,
     breakReminderEnabled: normalizeBoolean(stored.breakReminderEnabled, base.breakReminderEnabled),
     mindfulnessReminderEnabled: normalizeBoolean(stored.mindfulnessReminderEnabled, base.mindfulnessReminderEnabled),
     hasSeenOnboarding: normalizeBoolean(stored.hasSeenOnboarding, base.hasSeenOnboarding),
@@ -277,9 +280,6 @@ export function computeNextState(currentState, updates) {
 
   if ('currentTask' in updates) sanitized.currentTask = normalizeTask(updates.currentTask, current.currentTask);
   if ('isInFlow' in updates) sanitized.isInFlow = normalizeBoolean(updates.isInFlow, current.isInFlow);
-  if ('intentGateEnabled' in updates) {
-    sanitized.intentGateEnabled = normalizeBoolean(updates.intentGateEnabled, current.intentGateEnabled);
-  }
   if ('breakReminderEnabled' in updates) {
     sanitized.breakReminderEnabled = normalizeBoolean(updates.breakReminderEnabled, current.breakReminderEnabled);
   }

@@ -15,9 +15,7 @@ import { MINDFULNESS_QUOTES, MINDFULNESS_STRETCH_REMINDERS } from './constants.j
 
 /***** ELEMENT REFERENCES *****/
 
-const intentToggle = document.getElementById('onb-intent-toggle');
 const openOptionsBtn = document.getElementById('onb-open-options');
-const intentStatusEl = document.getElementById('onb-intent-status');
 
 const taskInput = document.getElementById('onb-task-input');
 const startDeepWorkBtn = document.getElementById('onb-start-deepwork');
@@ -33,7 +31,6 @@ const finishBtn = document.getElementById('onb-finish');
 /***** LOCAL UI STATE *****/
 
 let currentState = {
-  intentGateEnabled: true,
   mindfulnessReminderEnabled: false,
   isInFlow: false,
   currentTask: ''
@@ -65,11 +62,6 @@ function initOnboarding() {
  * @returns {void}
  */
 function bindEvents() {
-  intentToggle?.addEventListener('change', () => {
-    updateStateSafely({ intentGateEnabled: !!intentToggle.checked });
-    setStatus(intentStatusEl, intentToggle.checked ? 'Đã bật.' : 'Đã tắt.', intentToggle.checked ? 'ok' : '');
-  });
-
   openOptionsBtn?.addEventListener('click', () => {
     try {
       chrome.runtime.openOptionsPage();
@@ -116,7 +108,7 @@ function bindEvents() {
  * @returns {void}
  */
 function loadState() {
-  getStateSafely(['intentGateEnabled', 'mindfulnessReminderEnabled', 'isInFlow', 'currentTask'])
+  getStateSafely(['mindfulnessReminderEnabled', 'isInFlow', 'currentTask'])
     .then((state) => {
       currentState = { ...currentState, ...(state || {}) };
       applyStateToUi(currentState);
@@ -143,10 +135,6 @@ function handleStateDelta(delta) {
  * @returns {void}
  */
 function applyStateToUi(state) {
-  const intentOn = !!state.intentGateEnabled;
-  if (intentToggle) intentToggle.checked = intentOn;
-  setStatus(intentStatusEl, intentOn ? 'Đang bật.' : 'Đang tắt.', intentOn ? 'ok' : '');
-
   const mindfulnessOn = !!state.mindfulnessReminderEnabled;
   if (mindfulnessToggle) mindfulnessToggle.checked = mindfulnessOn;
   setStatus(

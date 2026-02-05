@@ -5,7 +5,7 @@
  * @feature f04 - Deep Work Mode (UI part)
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f08 - Mindfulness Reminders (UI part)
- * @feature f13 - Intent Gate for Distracting Sites (UI part)
+ * @feature f13 - Intent Gate for Distracting Sites (always on)
  */
 
 import { sendMessageSafely } from './messaging.js';
@@ -18,7 +18,6 @@ import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
  ******************************************************************************/
 
 // Reference đến các DOM elements chính
-const intentGateToggle = document.getElementById('intent-gate-toggle'); // Toggle hỏi lý do khi mở trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
 const mindfulnessReminderToggle = document.getElementById('mindfulness-reminder-toggle'); // Toggle nhắc nhở mindfulness
 const exerciseReminderToggle = document.getElementById('exercise-reminder-toggle'); // Toggle nhắc tập thể dục
@@ -51,7 +50,6 @@ function initializePopup() {
 
   // Đăng ký các event listeners
   console.log('🌸 Registering event listeners...');
-  intentGateToggle?.addEventListener('change', () => handleToggle('intentGateEnabled'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
   mindfulnessReminderToggle.addEventListener('change', () => handleToggle('mindfulnessReminderEnabled'));
   exerciseReminderToggle.addEventListener('change', () => handleToggle('exerciseReminderEnabled'));
@@ -178,7 +176,6 @@ function setBreakReminderLabelText(text) {
  */
 function loadState() {
   const defaults = {
-    intentGateEnabled: true,
     breakReminderEnabled: false,
     mindfulnessReminderEnabled: false,
     exerciseReminderEnabled: true,
@@ -199,7 +196,6 @@ function loadState() {
  */
 function updateUI(state) {
   // Update toggles
-  if (intentGateToggle) intentGateToggle.checked = !!state.intentGateEnabled;
   breakReminderToggle.checked = state.breakReminderEnabled;
   mindfulnessReminderToggle.checked = state.mindfulnessReminderEnabled;
   if (exerciseReminderToggle) exerciseReminderToggle.checked = !!state.exerciseReminderEnabled;
@@ -217,10 +213,6 @@ function updateUI(state) {
  */
 function handleStateUpdate(updates) {
   // Only update relevant UI elements for the changes
-  if ('intentGateEnabled' in updates && intentGateToggle) {
-    intentGateToggle.checked = updates.intentGateEnabled;
-  }
-  
   if ('breakReminderEnabled' in updates) {
     breakReminderToggle.checked = updates.breakReminderEnabled;
   }
@@ -258,7 +250,6 @@ function handleStateUpdate(updates) {
  */
 function handleToggle(settingKey) {
   const toggleMap = {
-    'intentGateEnabled': intentGateToggle,
     'breakReminderEnabled': breakReminderToggle,
     'mindfulnessReminderEnabled': mindfulnessReminderToggle,
     'exerciseReminderEnabled': exerciseReminderToggle
