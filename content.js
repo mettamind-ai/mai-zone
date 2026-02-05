@@ -9,6 +9,7 @@
  * @feature f10 - Context Menu Quick Actions (toast)
  * @feature f15 - YouTube Auto Skip Ads (youtube.com)
  * @feature f16 - Gemini Zen Hotkeys (gemini.google.com)
+ * @feature f17 - X.com Status Cleanup
  */
 
 // Content scripts can be programmatically injected multiple times (install/update, retries).
@@ -89,7 +90,8 @@ const GEMINI_ZEN_SELECTORS = Object.freeze([
   'hallucination-disclaimer',
   'top-bar-actions',
   'div[data-test-id="chat-app"].side-nav-menu-button',
-  'div.desktop-ogb-buffer'
+  'div.desktop-ogb-buffer',
+  'bard-sidenav'
 ]);
 
 // [f12] arXiv Zen (default ON): hide clutter on arxiv.org/html/*
@@ -110,6 +112,17 @@ const YOUTUBE_SKIP_AD_SELECTORS = Object.freeze([
   'button.ytp-skip-ad-button'
 ]);
 const YOUTUBE_SKIP_CLICK_COOLDOWN_MS = 800;
+
+// [f17] X.com status cleanup (hide right-rail container on status pages).
+const X_HOST_SUFFIX = 'x.com';
+const X_STATUS_PATH_REGEX = /^\/[^/]+\/status\/\d+(?:\/|$)/i;
+const X_STATUS_HIDE_SELECTORS = Object.freeze([
+  '#react-root main div[data-testid="sidebarColumn"]',
+  '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div.css-175oi2r.r-14lw9ot.r-jxzhtn.r-1ua6aaf.r-th6na.r-1phboty.r-16y2uox.r-184en5c.r-1abdc3e.r-1lg4w6u.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div.css-175oi2r.r-aqfbo4.r-gtdqiz.r-1gn8etr.r-4zbufd.r-1g40b8q',
+  '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div.css-175oi2r.r-aqfbo4.r-1l8l4mf.r-1hycxz'
+]);
+const X_STATUS_APPLY_DEBOUNCE_MS = 180;
+const X_STATUS_POLL_INTERVAL_MS = 5000;
 
 // [f03] Opera badge tick fallback: keep badge updated per-second by keeping the SW active via a Port.
 const OPERA_BADGE_PORT_NAME = 'maizoneBreakReminderBadgeTicker';
@@ -159,6 +172,12 @@ let arxivZenApplyTimeoutId = null;
 let youtubeSkipObserver = null;
 let youtubeSkipApplyTimeoutId = null;
 let lastYoutubeSkipClickAt = 0;
+
+// [f17] X.com status cleanup state
+let xStatusObserver = null;
+let xStatusApplyTimeoutId = null;
+let isXStatusCleanupActive = false;
+let xStatusPollIntervalId = null;
 
 let mindfulnessToastTimeoutId = null;
 let mindfulnessToastFadeTimeoutId = null;
@@ -253,6 +272,7 @@ function initialize() {
 function attachDomListeners() {
   if (domListenersAttached) return;
 
+  console.log('🌸 Attaching DOM listeners (keydown, etc.)');
   document.addEventListener('focusin', handleFocusIn);
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
@@ -276,6 +296,7 @@ function syncContentScriptActiveState() {
   syncGeminiZenActiveState();
   syncArxivZenActiveState();
   syncYoutubeSkipAdActiveState();
+  syncXStatusCleanupActiveState();
 }
 
 /******************************************************************************
@@ -475,6 +496,10 @@ function handleTypingEvent(event) {
  * Handle keydown events
  */
 function handleKeyDown(event) {
+  // Debug: log Alt key presses
+  if (event?.altKey && !event.repeat) {
+    console.log('🌸 Alt keydown detected:', event.key);
+  }
   if (handleBreakReminderHotkey(event)) return;
   if (handleMindfulnessHotkey(event)) return;
   if (handleChatgptHotkeys(event)) return;
@@ -1097,85 +1122,14 @@ function scheduleGeminiZenApply() {
  * @returns {boolean}
  */
 function isArxivHtmlPage() {
-  const host = window.location?.hostname || '';
-  const path = window.location?.pathname || '';
-  return host === ARXIV_HOST && path.startsWith('/html/');
-}
-
-/**
- * Sync arXiv Zen state.
- * @returns {void}
- */
-function syncArxivZenActiveState() {
-  if (!isArxivHtmlPage()) return;
-
-  if (isArxivZenModeEnabled) {
-    applyArxivZenMode(true);
-    startArxivZenObserver();
-  } else {
-    stopArxivZenObserver();
-    applyArxivZenMode(false);
-  }
-}
-
-/**
- * Apply or restore arXiv Zen mode.
- * @param {boolean} enable
- * @returns {void}
- */
-function applyArxivZenMode(enable) {
-  ARXIV_ZEN_HIDE_SELECTORS.forEach((sel) => {
-    const el = document.querySelector(sel);
-    if (!el) return;
-    if (enable) {
-      hideElementForZen(el);
-    } else {
-      restoreElementFromZen(el);
-    }
-  });
-}
-
-/**
- * Start observer to re-apply Zen on DOM changes.
- * @returns {void}
- */
-function startArxivZenObserver() {
-  if (!isArxivHtmlPage() || !isArxivZenModeEnabled || arxivZenObserver) return;
-
-  arxivZenObserver = new MutationObserver(() => {
-    if (arxivZenApplyTimeoutId) return;
-    arxivZenApplyTimeoutId = setTimeout(() => {
-      arxivZenApplyTimeoutId = null;
-      applyArxivZenMode(true);
-    }, 150);
-  });
-  arxivZenObserver.observe(document.documentElement, { childList: true, subtree: true });
-}
-
-/**
- * Stop arXiv Zen observer.
- * @returns {void}
- */
-function stopArxivZenObserver() {
-  arxivZenObserver?.disconnect?.();
-  arxivZenObserver = null;
-  clearTimeout(arxivZenApplyTimeoutId);
-  arxivZenApplyTimeoutId = null;
-}
-
-/******************************************************************************
- * ARXIV ZEN MODE [f12]
- ******************************************************************************/
-
-/**
- * Check if current page is arxiv.org/html/*
- * @returns {boolean}
- */
-function isArxivHtmlPage() {
   const host = (window.location?.hostname || '').toLowerCase();
   const path = window.location?.pathname || '';
   return host === ARXIV_HOST && path.startsWith('/html/');
 }
+
+// [f12] arXiv Zen activation delay (wait for page to fully load)
+const ARXIV_ZEN_ACTIVATION_DELAY_MS = 3000;
+let arxivZenActivationTimeoutId = null;
 
 /**
  * Sync arXiv Zen effects with current enabled state.
@@ -1185,11 +1139,22 @@ function syncArxivZenActiveState() {
   if (!isArxivHtmlPage()) return;
 
   if (isArxivZenModeEnabled) {
-    applyArxivZenMode(true);
-    startArxivZenObserver();
+    // Delay activation to wait for page to fully load
+    if (!arxivZenActivationTimeoutId) {
+      arxivZenActivationTimeoutId = setTimeout(() => {
+        arxivZenActivationTimeoutId = null;
+        applyArxivZenMode(true);
+        startArxivZenObserver();
+      }, ARXIV_ZEN_ACTIVATION_DELAY_MS);
+    }
     return;
   }
 
+  // Cancel pending activation if disabling
+  if (arxivZenActivationTimeoutId) {
+    clearTimeout(arxivZenActivationTimeoutId);
+    arxivZenActivationTimeoutId = null;
+  }
   stopArxivZenObserver();
   restoreArxivZenElements();
 }
@@ -1396,6 +1361,177 @@ function isElementVisible(el) {
   }
 
   return true;
+}
+
+/******************************************************************************
+ * X.COM STATUS CLEANUP [f17]
+ ******************************************************************************/
+
+/**
+ * Check whether current page is x.com (or subdomain).
+ * @returns {boolean}
+ */
+function isXHost() {
+  const host = (window.location?.hostname || '').toLowerCase();
+  return host === X_HOST_SUFFIX || host.endsWith(`.${X_HOST_SUFFIX}`);
+}
+
+/**
+ * Check whether current path matches /:user/status/:id
+ * @returns {boolean}
+ */
+function isXStatusPage() {
+  const path = window.location?.pathname || '';
+  return X_STATUS_PATH_REGEX.test(path);
+}
+
+/**
+ * Sync X.com status cleanup.
+ * @returns {void}
+ */
+function syncXStatusCleanupActiveState() {
+  if (!isXHost()) return;
+  startXStatusObserver();
+  startXStatusPolling();
+  scheduleXStatusCleanupApply();
+}
+
+/**
+ * Start observer to re-apply cleanup on SPA DOM changes.
+ * @returns {void}
+ */
+function startXStatusObserver() {
+  if (!isXHost()) return;
+  if (xStatusObserver) return;
+
+  const root = document.documentElement;
+  if (!root) return;
+
+  xStatusObserver = new MutationObserver(() => scheduleXStatusCleanupApply());
+  xStatusObserver.observe(root, { childList: true, subtree: true });
+}
+
+/**
+ * Start a lightweight polling loop as a fallback for late-loaded elements.
+ * @returns {void}
+ */
+function startXStatusPolling() {
+  if (!isXHost()) return;
+  if (xStatusPollIntervalId) return;
+
+  xStatusPollIntervalId = setInterval(() => {
+    applyXStatusCleanup();
+  }, X_STATUS_POLL_INTERVAL_MS);
+}
+
+/**
+ * Debounce cleanup re-apply.
+ * @returns {void}
+ */
+function scheduleXStatusCleanupApply() {
+  if (!isXHost()) return;
+  if (xStatusApplyTimeoutId) return;
+
+  xStatusApplyTimeoutId = setTimeout(() => {
+    xStatusApplyTimeoutId = null;
+    applyXStatusCleanup();
+  }, X_STATUS_APPLY_DEBOUNCE_MS);
+}
+
+/**
+ * Apply or restore X.com status cleanup based on current URL.
+ * @returns {void}
+ */
+function applyXStatusCleanup() {
+  if (!isXHost()) return;
+
+  if (!isXStatusPage()) {
+    if (isXStatusCleanupActive) restoreXStatusHiddenElements();
+    isXStatusCleanupActive = false;
+    return;
+  }
+
+  isXStatusCleanupActive = true;
+  hideXStatusElements();
+}
+
+/**
+ * Hide targeted elements on X status pages.
+ * @returns {void}
+ */
+function hideXStatusElements() {
+  X_STATUS_HIDE_SELECTORS.forEach((selector) => {
+    if (typeof selector !== 'string' || !selector.trim()) return;
+    const nodes = document.querySelectorAll(selector);
+    nodes.forEach((el) => hideElementForXStatus(el));
+  });
+}
+
+/**
+ * Hide an element while storing its previous display.
+ * @param {Element} el
+ * @returns {void}
+ */
+function hideElementForXStatus(el) {
+  if (!el || !(el instanceof HTMLElement)) return;
+  if (el.dataset?.maizoneXStatusHidden === '1') return;
+
+  const prevDisplay = el.style.display;
+  const prevPriority = el.style.getPropertyPriority?.('display') || '';
+
+  el.dataset.maizoneXStatusHidden = '1';
+  el.dataset.maizoneXStatusPrevDisplay = prevDisplay;
+  el.dataset.maizoneXStatusPrevDisplayPriority = prevPriority;
+
+  try {
+    el.style.setProperty('display', 'none', 'important');
+  } catch {
+    el.style.display = 'none';
+  }
+}
+
+/**
+ * Restore elements hidden by X status cleanup.
+ * @returns {void}
+ */
+function restoreXStatusHiddenElements() {
+  try {
+    const hiddenEls = document.querySelectorAll('[data-maizone-x-status-hidden="1"]');
+    hiddenEls.forEach((el) => restoreElementFromXStatus(el));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Restore a single element hidden by X status cleanup.
+ * @param {Element} el
+ * @returns {void}
+ */
+function restoreElementFromXStatus(el) {
+  if (!el || !(el instanceof HTMLElement)) return;
+  if (el.dataset?.maizoneXStatusHidden !== '1') return;
+
+  const prevDisplay = typeof el.dataset.maizoneXStatusPrevDisplay === 'string' ? el.dataset.maizoneXStatusPrevDisplay : '';
+  const prevPriority = typeof el.dataset.maizoneXStatusPrevDisplayPriority === 'string' ? el.dataset.maizoneXStatusPrevDisplayPriority : '';
+
+  if (prevDisplay) {
+    try {
+      el.style.setProperty('display', prevDisplay, prevPriority || '');
+    } catch {
+      el.style.display = prevDisplay;
+    }
+  } else {
+    try {
+      el.style.removeProperty('display');
+    } catch {
+      el.style.display = '';
+    }
+  }
+
+  delete el.dataset.maizoneXStatusHidden;
+  delete el.dataset.maizoneXStatusPrevDisplay;
+  delete el.dataset.maizoneXStatusPrevDisplayPriority;
 }
 
 /******************************************************************************
