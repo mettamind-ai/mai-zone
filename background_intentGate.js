@@ -6,12 +6,11 @@
 
 import { ensureInitialized, getState, onStateDelta } from './background_state.js';
 import { messageActions } from './actions.js';
-import { getIntentGateMatch } from './intent_gate_helpers.js';
+import { getIntentGateAllowMinutes, getIntentGateMatch } from './intent_gate_helpers.js';
 
 /***** CONFIG *****/
 
-const INTENT_GATE_ALLOW_MINUTES = 5;
-const INTENT_GATE_ALLOW_MS = INTENT_GATE_ALLOW_MINUTES * 60 * 1000;
+const INTENT_GATE_DEFAULT_ALLOW_MINUTES = 5;
 const INTENT_GATE_MIN_REASON_CHARS = 5;
 const INTENT_GATE_LOG_LIMIT = 50;
 
@@ -110,21 +109,27 @@ async function isTabAllowed(tabId) {
 /**
  * Store allow window for a tab and schedule expiration.
  * @param {number} tabId - Chrome tab id
+ * @param {number} [allowMinutes=INTENT_GATE_DEFAULT_ALLOW_MINUTES] - Allow window in minutes
  * @returns {Promise<void>}
  */
-async function allowTabForWindow(tabId) {
+async function allowTabForWindow(tabId, allowMinutes = INTENT_GATE_DEFAULT_ALLOW_MINUTES) {
   if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return;
+  const safeAllowMinutes =
+    Number.isFinite(allowMinutes) && allowMinutes > 0
+      ? Math.max(1, Math.floor(allowMinutes))
+      : INTENT_GATE_DEFAULT_ALLOW_MINUTES;
+  const allowMs = safeAllowMinutes * 60 * 1000;
 
   const key = getAllowKey(tabId);
   await chrome.storage.local.set({
     [key]: {
       allowed: true,
-      expiresAt: Date.now() + INTENT_GATE_ALLOW_MS
+      expiresAt: Date.now() + allowMs
     }
   });
 
   await chrome.alarms.create(getAlarmName(tabId), {
-    delayInMinutes: INTENT_GATE_ALLOW_MINUTES
+    delayInMinutes: safeAllowMinutes
   });
 }
 
@@ -282,11 +287,16 @@ function handleAllowAccess(message, sender, sendResponse) {
     await ensureInitialized();
     await logReason(reason);
 
-    await allowTabForWindow(tabId);
-
     const pendingKey = getPendingKey(tabId);
     const result = await chrome.storage.local.get(pendingKey);
     const pendingUrl = typeof result?.[pendingKey] === 'string' ? result[pendingKey] : 'https://example.com/';
+    const allowMinutes = getIntentGateAllowMinutes({
+      url: pendingUrl,
+      reason,
+      defaultMinutes: INTENT_GATE_DEFAULT_ALLOW_MINUTES
+    });
+
+    await allowTabForWindow(tabId, allowMinutes);
 
     await chrome.storage.local.remove(pendingKey);
 

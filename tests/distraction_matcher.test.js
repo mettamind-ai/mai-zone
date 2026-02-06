@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { getHostnameFromUrl, isHostnameInList } from '../distraction_matcher.js';
-import { getIntentGateMatch } from '../intent_gate_helpers.js';
+import { getIntentGateAllowMinutes, getIntentGateMatch } from '../intent_gate_helpers.js';
 
 test('getHostnameFromUrl normalizes hostnames', () => {
   assert.equal(getHostnameFromUrl('https://WWW.FACEBOOK.COM/some/path?x=1'), 'facebook.com');
@@ -54,4 +54,41 @@ test('getIntentGateMatch returns false when site not in lists', () => {
 
   const match = getIntentGateMatch('https://example.com', state);
   assert.equal(match.shouldGate, false);
+});
+
+test('getIntentGateAllowMinutes gives YouTube study reason a 60-minute window', () => {
+  assert.equal(
+    getIntentGateAllowMinutes({
+      url: 'https://www.youtube.com/watch?v=abc123',
+      reason: '  Học   bài  '
+    }),
+    60
+  );
+
+  assert.equal(
+    getIntentGateAllowMinutes({
+      url: 'https://m.youtube.com/',
+      reason: 'hoc bai'
+    }),
+    60
+  );
+});
+
+test('getIntentGateAllowMinutes falls back to default for non-matching cases', () => {
+  assert.equal(
+    getIntentGateAllowMinutes({
+      url: 'https://youtube.com/',
+      reason: 'xem giải trí'
+    }),
+    5
+  );
+
+  assert.equal(
+    getIntentGateAllowMinutes({
+      url: 'https://facebook.com/',
+      reason: 'hoc bai',
+      defaultMinutes: 7
+    }),
+    7
+  );
 });
