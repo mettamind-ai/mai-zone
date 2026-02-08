@@ -272,7 +272,6 @@ function initialize() {
 function attachDomListeners() {
   if (domListenersAttached) return;
 
-  console.log('🌸 Attaching DOM listeners (keydown, etc.)');
   document.addEventListener('focusin', handleFocusIn);
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
@@ -438,12 +437,6 @@ function handleFocusIn(event) {
     const element = event.target;
     if (isTextInput(element)) {
       setCurrentElement(element);
-      console.log('🌸 Text field focused:', {
-        tag: element.tagName.toLowerCase(),
-        id: element.id || 'no-id',
-        class: element.className || 'no-class',
-        placeholder: element.placeholder || ''
-      });
     }
   } catch (error) {
     const errorMessage = error?.message || String(error);
@@ -496,10 +489,6 @@ function handleTypingEvent(event) {
  * Handle keydown events
  */
 function handleKeyDown(event) {
-  // Debug: log Alt key presses
-  if (event?.altKey && !event.repeat) {
-    console.log('🌸 Alt keydown detected:', event.key);
-  }
   if (handleBreakReminderHotkey(event)) return;
   if (handleMindfulnessHotkey(event)) return;
   if (handleChatgptHotkeys(event)) return;
